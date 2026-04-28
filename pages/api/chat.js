@@ -5,7 +5,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { parseQuery, formatValue } from "../../lib/censusTranslator";
 import { fetchCensusValue } from "../../lib/censusApi";
-import { QUERY_TYPES } from "../../lib/censusConstants";
+import { QUERY_TYPES, CURRENT_ACS_YEAR } from "../../lib/censusConstants";
+import { computeRateIfNeeded } from "../../lib/censusRates";
 import fs from "fs";
 import path from "path";
 
@@ -67,6 +68,10 @@ const CONDITIONAL_SKILLS = [
     keywords: ["api", "url", "endpoint", "fetch", "request", "query string", "build", "construct", "http"],
   },
   {
+    file: path.join(SKILLS_DIR, "acs-variable-definitions", "SKILL.md"),
+    keywords: ["rate", "percent", "poverty", "unemployment", "unemployed", "commute", "travel time", "education", "bachelor"],
+  },
+  {
     file: path.join(SKILLS_DIR, "acs-temporal-caveats", "SKILL.md"),
     keywords: ["trend", "over time", "change", "since", "compared to", "grew", "growth", "decline", "increase", "decrease", "historical", "year", "years", "2010", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "boundary", "annex", "tract", "zcta", "zip", "metro area", "cbsa", "before and after", "pre-covid", "post-covid", "race", "multiracial"],
   },
@@ -96,6 +101,7 @@ const CENSUS_TOOL = {
     properties: {
       metric: {
         type: "string",
+        enum: QUERY_TYPES,
         description: `The data metric to look up. Must be one of: ${QUERY_TYPES.join(", ")}.`,
       },
       city: {
@@ -278,13 +284,17 @@ async function runCensusTool(toolInput) {
 
     const { variable, geoParams, locationLabel } = parsed;
     const rawValue = await fetchCensusValue(variable.id, geoParams, censusApiKey);
-    const formattedValue = formatValue(rawValue, variable.format);
+
+    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey);
+    const formattedValue = rateResult
+      ? formatValue(rateResult.value, rateResult.format)
+      : formatValue(rawValue, variable.format);
 
     return {
       metric: variable.label,
       value: formattedValue,
       location: locationLabel,
-      source: "ACS 5-Year Estimates (2022), U.S. Census Bureau",
+      source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
     };
   } catch (err) {
     // Ensure the error message is always a plain string — avoids JSON.stringify issues

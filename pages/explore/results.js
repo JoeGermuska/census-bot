@@ -10,6 +10,7 @@ import {
   EXPLORE_METRICS_STORAGE_KEY,
   EXPLORE_LOCATION_STORAGE_KEY,
   buildCityStateQuery,
+  CURRENT_ACS_YEAR,
 } from "../../lib/censusConstants";
 
 export default function ExploreResults() {
@@ -27,7 +28,7 @@ export default function ExploreResults() {
     return Number.isFinite(val) ? val : 67;
   }, [router.query.from]);
   const [progressWidth, setProgressWidth] = useState(fromProgress);
-  const TREND_END_YEAR = 2022;
+  const TREND_END_YEAR = parseInt(CURRENT_ACS_YEAR, 10);
   const TREND_START_YEAR = TREND_END_YEAR - 9;
 
   const stateName = useMemo(() => {

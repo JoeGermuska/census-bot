@@ -4,6 +4,8 @@
 
 import { parseQuery, formatValue } from "../../lib/censusTranslator";
 import { fetchCensusValue } from "../../lib/censusApi";
+import { computeRateIfNeeded } from "../../lib/censusRates";
+import { CURRENT_ACS_YEAR } from "../../lib/censusConstants";
 
 export default async function handler(req, res) {
   // Only allow POST
@@ -35,16 +37,19 @@ export default async function handler(req, res) {
 
   try {
     const rawValue = await fetchCensusValue(variable.id, geoParams, apiKey);
-    const formattedValue = formatValue(rawValue, variable.format);
+
+    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, apiKey);
+    const formattedValue = rateResult
+      ? formatValue(rateResult.value, rateResult.format)
+      : formatValue(rawValue, variable.format);
 
     return res.status(200).json({
       query,
       location: locationLabel,
       metric: variable.label,
       value: formattedValue,
-      // Human-readable sentence
       summary: `The ${variable.label.toLowerCase()} in ${locationLabel} is ${formattedValue}.`,
-      source: "ACS 5-Year Estimates (2022), U.S. Census Bureau",
+      source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
     });
   } catch (err) {
     console.error("Census fetch error:", err.message);

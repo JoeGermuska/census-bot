@@ -3,7 +3,9 @@ import { fetchCensusVariable } from "../../lib/censusApi";
 import { parseQuery, VARIABLE_MAP } from "../../lib/censusTranslator";
 
 const POVERTY_VARIABLE = "B17001_002E";
-const POPULATION_VARIABLE = "B01003_001E";
+const POVERTY_UNIVERSE_VARIABLE = "B17001_001E"; // population for whom poverty status is determined
+const UNEMPLOYMENT_VARIABLE = "B23025_005E";
+const LABOR_FORCE_VARIABLE = "B23025_003E";      // civilian labor force (unemployment denominator)
 const MIN_YEAR = 2009;
 
 function isValidYear(value) {
@@ -30,8 +32,14 @@ function resolveVariableFromMetric(metric) {
   return null;
 }
 
-function shouldComputePovertyRate(metric, variableId) {
-  return normalizeMetric(metric).includes("poverty rate") || variableId === POVERTY_VARIABLE;
+function shouldComputeRate(variableId) {
+  return variableId === POVERTY_VARIABLE || variableId === UNEMPLOYMENT_VARIABLE;
+}
+
+function getDenominatorVariable(variableId) {
+  if (variableId === POVERTY_VARIABLE) return POVERTY_UNIVERSE_VARIABLE;
+  if (variableId === UNEMPLOYMENT_VARIABLE) return LABOR_FORCE_VARIABLE;
+  return null;
 }
 
 export default async function handler(req, res) {
@@ -84,20 +92,20 @@ export default async function handler(req, res) {
 
       let numericValue = metricValue;
 
-      // For poverty-rate requests, convert poverty count to a true percentage.
-      if (shouldComputePovertyRate(metric, variable.id)) {
-        const population = await fetchCensusVariable({
+      if (shouldComputeRate(variable.id)) {
+        const denominatorId = getDenominatorVariable(variable.id);
+        const denominator = await fetchCensusVariable({
           year,
-          variable: POPULATION_VARIABLE,
+          variable: denominatorId,
           city,
           state,
         });
 
-        if (!Number.isFinite(population) || population <= 0) {
-          throw new Error(`Invalid population value returned for ${city}, ${state} in ${year}.`);
+        if (!Number.isFinite(denominator) || denominator <= 0) {
+          throw new Error(`Invalid denominator value for ${variable.id} in ${city}, ${state} (${year}).`);
         }
 
-        numericValue = (metricValue / population) * 100;
+        numericValue = (metricValue / denominator) * 100;
       }
 
       points.push({ year, numericValue: Number(numericValue.toFixed(2)) });
