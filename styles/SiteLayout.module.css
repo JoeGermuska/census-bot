@@ -227,3 +227,35 @@
     border-radius: 9px;
   }
 }
+
+/* Very small phones — hide nav icons so items fit on one row */
+@media (max-width: 400px) {
+  .nav {
+    padding: 0.6rem 0.65rem;
+  }
+
+  .navTrailing {
+    gap: 0.25rem;
+  }
+
+  .navLink {
+    padding: 0.42rem 0.55rem;
+    font-size: 0.78rem;
+    gap: 0;
+  }
+
+  .navLink svg {
+    display: none;
+  }
+
+  .cta {
+    padding: 0.42rem 0.65rem;
+    font-size: 0.78rem;
+    gap: 0.25rem;
+  }
+
+  .ctaIcon {
+    width: 14px;
+    height: 14px;
+  }
+}

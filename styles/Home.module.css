@@ -490,6 +490,22 @@
   font-size: 13px;
 }
 
+/* TrendChart card padding — used instead of inline styles so it can be responsive */
+.trendCardBody {
+  padding: 24px 28px;
+}
+
+.trendCardExpanded {
+  padding: 30px 34px;
+}
+
+@media (max-width: 560px) {
+  .trendCardBody,
+  .trendCardExpanded {
+    padding: 14px 12px;
+  }
+}
+
 /* ── Query preview pill ── */
 .queryPreview {
   font-size: 0.8rem;

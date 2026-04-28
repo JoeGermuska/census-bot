@@ -56,10 +56,9 @@ export default function TrendChart({ data, expanded = false }) {
 
   return (
     <div
-      className={homeStyles.trendCard}
+      className={`${homeStyles.trendCard} ${expanded ? homeStyles.trendCardExpanded : homeStyles.trendCardBody}`}
       style={{
         background: "var(--chart-surface)",
-        padding: expanded ? "30px 34px" : "24px 28px",
         marginTop: expanded ? 0 : 16,
       }}
     >
