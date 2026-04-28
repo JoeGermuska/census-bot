@@ -430,7 +430,7 @@
 }
 
 .sectionCardOverview:hover {
-  border-color: rgba(191, 219, 254, 0.55);
+  border-color: rgba(191, 219, 254, 0.64);
 }
 
 .sectionCardTech {
@@ -438,7 +438,7 @@
 }
 
 .sectionCardTech:hover {
-  border-color: rgba(165, 243, 252, 0.54);
+  border-color: rgba(165, 243, 252, 0.62);
 }
 
 .sectionCardTeam {
@@ -446,7 +446,7 @@
 }
 
 .sectionCardTeam:hover {
-  border-color: rgba(221, 214, 254, 0.58);
+  border-color: rgba(221, 214, 254, 0.66);
 }
 
 .sectionCardCredits {
@@ -454,7 +454,7 @@
 }
 
 .sectionCardCredits:hover {
-  border-color: rgba(187, 247, 208, 0.58);
+  border-color: rgba(187, 247, 208, 0.66);
 }
 
 :global(html[data-theme="light"]) .sectionCardOverview {
@@ -462,7 +462,7 @@
 }
 
 :global(html[data-theme="light"]) .sectionCardOverview:hover {
-  border-color: rgba(37, 99, 235, 0.36);
+  border-color: rgba(37, 99, 235, 0.44);
 }
 
 :global(html[data-theme="light"]) .sectionCardTech {
@@ -470,7 +470,7 @@
 }
 
 :global(html[data-theme="light"]) .sectionCardTech:hover {
-  border-color: rgba(8, 145, 178, 0.34);
+  border-color: rgba(8, 145, 178, 0.42);
 }
 
 :global(html[data-theme="light"]) .sectionCardTeam {
@@ -478,7 +478,7 @@
 }
 
 :global(html[data-theme="light"]) .sectionCardTeam:hover {
-  border-color: rgba(109, 40, 217, 0.32);
+  border-color: rgba(109, 40, 217, 0.4);
 }
 
 :global(html[data-theme="light"]) .sectionCardCredits {
@@ -486,7 +486,7 @@
 }
 
 :global(html[data-theme="light"]) .sectionCardCredits:hover {
-  border-color: rgba(22, 163, 74, 0.34);
+  border-color: rgba(22, 163, 74, 0.42);
 }
 
 .sectionHeading {

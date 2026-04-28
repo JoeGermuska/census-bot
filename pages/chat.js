@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import Head from "next/head";
 import SiteLayout from "../components/SiteLayout";
+import TrendChart from "../components/TrendChart";
 import styles from "../styles/Chat.module.css";
 
 const MAX_EXCHANGES = 10;
@@ -158,6 +159,15 @@ function renderMarkdown(text) {
   return elements;
 }
 
+function safeParse(content) {
+  if (typeof content !== "string") return content;
+  try {
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
 // ── Icons ────────────────────────────────────────────────────────────────────
 function SendIcon() {
   return (
@@ -233,6 +243,8 @@ export default function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [expandedChartIndex, setExpandedChartIndex] = useState(null);
+  const [minimizedCharts, setMinimizedCharts] = useState({});
   const listRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -249,6 +261,23 @@ export default function ChatPage() {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
   }, [input]);
+
+  useEffect(() => {
+    let latestChartIndex = -1;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i];
+      if (msg.role !== "assistant") continue;
+      const parsed = safeParse(msg.content);
+      if (parsed?.type === "trend_chart") {
+        latestChartIndex = i;
+        break;
+      }
+    }
+
+    if (latestChartIndex !== -1 && !minimizedCharts[latestChartIndex]) {
+      setExpandedChartIndex(latestChartIndex);
+    }
+  }, [messages, minimizedCharts]);
 
   async function sendMessage(overrideText) {
     const text = (overrideText !== undefined ? overrideText : input).trim();
@@ -301,6 +330,8 @@ export default function ChatPage() {
     setMode(null);
     setMessages([]);
     setInput("");
+    setExpandedChartIndex(null);
+    setMinimizedCharts({});
   }
 
   function selectMode(modeId) {
@@ -381,26 +412,69 @@ export default function ChatPage() {
                 </div>
               ) : (
                 <div className={styles.messageList} ref={listRef}>
-                  {messages.map((msg, i) => (
-                    <div key={i} className={`${styles.messageRow} ${msg.role === "user" ? styles.messageRowUser : ""}`}>
-                      {msg.role === "assistant" ? <BotAvatar /> : <UserAvatar />}
-                      <div className={`${styles.bubble} ${
-                        msg.role === "user"
-                          ? styles.bubbleUser
-                          : msg.error
-                          ? `${styles.bubbleAssistant} ${styles.bubbleError}`
-                          : styles.bubbleAssistant
-                      }`}>
-                        {msg.role === "assistant" ? renderMarkdown(msg.content) : msg.content}
-                      {msg.role === "assistant" && (msg.methodology || msg.caveats) && (
-                        <MoreInfo methodology={msg.methodology} caveats={msg.caveats} />
-                      )}
+                  {messages.map((msg, i) => {
+                    const parsed = msg.role === "assistant" ? safeParse(msg.content) : null;
+                    const isTrendChart = parsed?.type === "trend_chart";
+                    const isChartError = parsed?.type === "error";
+
+                    return (
+                      <div key={i} className={`${styles.messageRow} ${msg.role === "user" ? styles.messageRowUser : ""}`}>
+                        {msg.role === "assistant" ? <BotAvatar /> : <UserAvatar />}
+                        <div className={`${styles.bubble} ${
+                          msg.role === "user"
+                            ? styles.bubbleUser
+                            : msg.error || isChartError
+                            ? `${styles.bubbleAssistant} ${styles.bubbleError}`
+                            : styles.bubbleAssistant
+                        }`}>
+                          {msg.role === "assistant" ? (
+                            isTrendChart ? (
+                              <TrendChart data={parsed} />
+                            ) : isChartError ? (
+                              parsed.message
+                            ) : (
+                              renderMarkdown(msg.content)
+                            )
+                          ) : (
+                            msg.content
+                          )}
+                          {msg.role === "assistant" && !isTrendChart && (msg.methodology || msg.caveats) && (
+                            <MoreInfo methodology={msg.methodology} caveats={msg.caveats} />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {loading && <TypingIndicator />}
                 </div>
               )}
+
+              {expandedChartIndex !== null &&
+                (() => {
+                  const chartMsg = messages[expandedChartIndex];
+                  const parsed = chartMsg?.role === "assistant" ? safeParse(chartMsg.content) : null;
+                  if (!parsed || parsed.type !== "trend_chart" || minimizedCharts[expandedChartIndex]) {
+                    return null;
+                  }
+
+                  return (
+                    <div className={styles.chartOverlay} role="dialog" aria-modal="true" aria-label="Expanded chart">
+                      <div className={styles.chartOverlayInner}>
+                        <TrendChart data={parsed} expanded />
+                        <button
+                          type="button"
+                          className={styles.chartMinimizeBtn}
+                          onClick={() => {
+                            setMinimizedCharts((prev) => ({ ...prev, [expandedChartIndex]: true }));
+                            setExpandedChartIndex(null);
+                          }}
+                        >
+                          Minimize
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
               {/* Input area */}
               <div className={styles.inputArea}>

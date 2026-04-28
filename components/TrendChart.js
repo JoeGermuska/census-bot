@@ -7,6 +7,29 @@ import homeStyles from "../styles/Home.module.css";
 
 function CustomTooltip({ active, payload, label, metric }) {
   if (!active || !payload?.length) return null;
+  const point = payload[0]?.payload;
+  const rawValue = point?.numericValue;
+  const hasValue = Number.isFinite(rawValue);
+
+  let displayValue = "N/A";
+  if (hasValue) {
+    if (/income|rent|value/i.test(metric)) {
+      displayValue = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      }).format(rawValue);
+    } else if (/rate|percent|poverty/i.test(metric)) {
+      displayValue = `${rawValue.toFixed(2)}%`;
+    } else if (/age/i.test(metric)) {
+      displayValue = `${rawValue.toFixed(0)} years`;
+    } else if (/commute|travel time|minute/i.test(metric)) {
+      displayValue = `${rawValue.toFixed(0)} minutes`;
+    } else {
+      displayValue = new Intl.NumberFormat("en-US").format(rawValue);
+    }
+  }
+
   return (
     <div style={{
       background: "var(--chart-tooltip-bg)",
@@ -17,26 +40,27 @@ function CustomTooltip({ active, payload, label, metric }) {
     }}>
       <div style={{ color: "var(--chart-muted)", marginBottom: 4 }}>{label}</div>
       <div style={{ color: "var(--text)", fontWeight: 600 }}>
-        {payload[0].payload.value ?? "N/A"}
+        {displayValue}
       </div>
       <div style={{ color: "var(--chart-faint)", fontSize: 11, marginTop: 2 }}>{metric}</div>
     </div>
   );
 }
 
-export default function TrendChart({ data }) {
+export default function TrendChart({ data, expanded = false }) {
   if (!data) return null;
 
   const { metric, location, points, source } = data;
   const validPoints = points.filter(p => p.numericValue !== null);
+  const chartHeight = expanded ? 420 : 200;
 
   return (
     <div
       className={homeStyles.trendCard}
       style={{
         background: "var(--chart-surface)",
-        padding: "24px 28px",
-        marginTop: 16,
+        padding: expanded ? "30px 34px" : "24px 28px",
+        marginTop: expanded ? 0 : 16,
       }}
     >
       <div style={{
@@ -57,7 +81,7 @@ export default function TrendChart({ data }) {
       {validPoints.length === 0 ? (
         <div style={{ color: "var(--chart-empty)", fontSize: 14 }}>No trend data available.</div>
       ) : (
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={chartHeight}>
           <LineChart data={validPoints} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
             <XAxis

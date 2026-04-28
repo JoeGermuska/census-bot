@@ -27,6 +27,8 @@ export default function ExploreResults() {
     return Number.isFinite(val) ? val : 67;
   }, [router.query.from]);
   const [progressWidth, setProgressWidth] = useState(fromProgress);
+  const TREND_END_YEAR = 2022;
+  const TREND_START_YEAR = TREND_END_YEAR - 9;
 
   const stateName = useMemo(() => {
     const raw = router.query.state;
@@ -107,19 +109,38 @@ export default function ExploreResults() {
     };
   }, [ready, metrics, city, stateName]);
 
-  async function handleTrend(query) {
+  async function handleTrend(query, metricLabel) {
     setTrendLoadingKey(query);
     try {
       const res = await fetch("/api/trend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({
+          city,
+          state: stateName,
+          metric: metricLabel,
+          query,
+          startYear: TREND_START_YEAR,
+          endYear: TREND_END_YEAR,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setTrendByQuery(prev => ({ ...prev, [query]: { error: data.error || "Trend failed" } }));
       } else {
-        setTrendByQuery(prev => ({ ...prev, [query]: data }));
+        const chartData = {
+          type: "trend_chart",
+          metric: metricLabel || "Trend",
+          location: `${city}, ${stateName}`,
+          points: Array.isArray(data)
+            ? data.map((point) => ({
+                year: Number(point.year),
+                numericValue: Number(point.numericValue),
+              }))
+            : [],
+          source: "U.S. Census Bureau ACS 5-Year Estimates",
+        };
+        setTrendByQuery(prev => ({ ...prev, [query]: chartData }));
       }
     } catch {
       setTrendByQuery(prev => ({ ...prev, [query]: { error: "Network error" } }));
@@ -249,9 +270,9 @@ export default function ExploreResults() {
                         className={`${homeStyles.button} ${homeStyles.trendButton}`}
                         style={{ marginTop: 10 }}
                         disabled={trendBusy}
-                        onClick={() => handleTrend(row.query)}
+                        onClick={() => handleTrend(row.query, result.metric)}
                       >
-                        {trendBusy ? <span className={homeStyles.spinner} /> : "📈 Show 5-year trend"}
+                        {trendBusy ? <span className={homeStyles.spinner} /> : "📈 Show Chart"}
                       </button>
                       {trend && trend.error != null && (
                         <p className={ex.hint} style={{ color: "var(--error)" }}>

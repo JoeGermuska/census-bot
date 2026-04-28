@@ -111,12 +111,84 @@ const CENSUS_TOOL = {
   },
 };
 
+const TREND_TOOL = {
+  name: "get_census_trend",
+  description: "Fetch multi-year Census ACS time series data for a city/state. Use for graphs or trends.",
+  input_schema: {
+    type: "object",
+    properties: {
+      city: { type: "string" },
+      state: { type: "string" },
+      metric: { type: "string" },
+      startYear: { type: "number" },
+      endYear: { type: "number" },
+    },
+    required: ["city", "state", "startYear", "endYear"],
+  },
+};
+
+const TREND_ROUTE_KEYWORDS = [
+  "trend",
+  "over time",
+  "change",
+  "graph",
+  "chart",
+  "visualization",
+  "historical",
+  "compare",
+  "comparison",
+  "since",
+  "increase",
+  "decrease",
+];
+
 const BASE_SYSTEM_PROMPT = `You are a knowledgeable U.S. Census data assistant built into CensusBot.
 You help users understand American Community Survey (ACS) data — income, rent, population, poverty rates, employment, age, and commute times for U.S. cities.
 
 You have access to a live Census data lookup tool. Use it proactively when a user asks about specific metrics for a city/state — don't describe what you could look up, just call the tool and return the real number.
 
 Available metrics: ${QUERY_TYPES.join(", ")}.
+
+CRITICAL TOOL RULES:
+- You MUST use lookup_census_data ONLY for single-year statistics.
+- If the user requests ANY of the following:
+  - trends
+  - changes over time
+  - graphs
+  - historical comparisons
+  - multi-year analysis
+  YOU MUST NOT attempt to answer using single-year data.
+  Instead, you MUST explicitly say:
+  "This requires time-series data. I will use the trend tool."
+- NEVER suggest Census API URLs, variables, tables, or methodology unless it comes directly from tool output.
+- NEVER guess ACS tables or variables.
+- NEVER describe how to fetch data externally.
+
+CRITICAL VISUALIZATION OUTPUT RULES:
+- For graph/chart/trend/change-over-time/historical-comparison/visualization requests, output ONLY JSON in this exact shape:
+  {
+    "type": "trend_chart",
+    "metric": string,
+    "location": string,
+    "points": [{ "year": number, "numericValue": number }],
+    "source": string
+  }
+- Do NOT include any explanation text with chart JSON.
+- Do NOT output CSV.
+- Do NOT output markdown tables.
+- Do NOT suggest external tools.
+- Do NOT describe graphing steps.
+- Do NOT mention Recharts, Excel, or Sheets.
+- Do NOT output raw Census variable IDs unless explicitly asked.
+
+If no tool data is available:
+- DO NOT guess datasets
+- DO NOT suggest tables (B17001, etc.)
+- DO NOT construct API URLs
+- For chart/trend requests, respond ONLY:
+  {"type":"error","message":"Unable to generate chart data."}
+- For non-chart requests, respond:
+  "I don’t have time-series Census access for that request yet."
 
 Formatting rules (strictly follow these):
 - This is a chat UI. Never use --- dividers, ## headers, or ### headers.
@@ -126,7 +198,7 @@ Formatting rules (strictly follow these):
 - Lead with the number, then one sentence of context if useful. That's it.
 - Don't make up numbers — always use the tool for specific statistics.
 - If a metric or location isn't supported, say so in one sentence and suggest the closest option.
-- If a tool call returns an error, do NOT retry it. Acknowledge the issue briefly and answer from your general knowledge instead.`;
+- If a tool call returns an error, do NOT retry it. Respond exactly: "I don’t have time-series Census access for that request yet."`;
 
 // ── Mode-specific skill routing ─────────────────────────────────────────────
 const MODE_SKILLS = {
@@ -151,27 +223,12 @@ const MODE_SKILLS = {
 
 const MODE_PROMPTS = {
   learn: `\nMode: LEARN. The user wants to understand ACS data concepts. Focus on clear explanations. Use the tool only if they ask about a specific place. Prefer plain-language teaching over raw numbers.`,
-  statistic: `\nMode: FIND STATISTIC. The user wants a specific number. Use the tool immediately when they name a metric and place. Be precise and cite the source.
-
-After answering, ALWAYS append these two sections using exact markers:
-
-[methodology]
-One sentence on how this statistic is calculated and what population/universe it covers. Example: "Median gross rent from ACS 5-Year Estimates (2022), Table B25064. Covers renter-occupied housing units paying cash rent."
-
-[caveats]
-Bullet list of 1-3 relevant data quirks. Only include caveats that actually apply to this specific query. Examples:
-- Margin of error: ±$43 (90% confidence)
-- Covers renter-occupied units only, not homeowners
-- City boundaries may have changed due to annexation since 2010
-- 2020 data uses experimental estimates with lower response rates
-
-If no meaningful caveats apply, write: "No major caveats for this query."
-
-Always include both [methodology] and [caveats] sections, even for simple queries.`,
-  visualize: `\nMode: VISUALIZATION. The user wants chart/visualization guidance. Suggest specific chart types, axis labels, and which ACS tables and variables to use. If they name a place, look up real data to ground your suggestions.`,
+  statistic: `\nMode: FIND STATISTIC. The user wants a specific number. Use the lookup tool immediately when they provide a metric and place. Only report data returned by tools. Never add ACS table IDs, variable IDs, URL instructions, or methodology unless explicitly present in tool output.`,
+  visualize: `\nMode: VISUALIZATION. The user wants chart/visualization help. For multi-year or trend requests, call the trend tool and return chart-ready data. Never provide external API instructions, ACS table guesses, or variable guesses.`,
 };
 
-function buildSystemPrompt(userMessage, mode) {
+function buildSystemPrompt(userMessage, mode, forceTrendRouting = false) {
+  const visualizationRequest = needsTrendRouting(userMessage) || mode === "visualize";
   const alwaysOn = loadAlwaysOnSkills();
 
   // Load mode-specific skills
@@ -179,12 +236,19 @@ function buildSystemPrompt(userMessage, mode) {
   const modeSkills = modeFiles.map(readSkillCached).filter(Boolean);
 
   // Also load keyword-conditional skills
-  const conditional = loadConditionalSkills(userMessage);
+  const conditional = visualizationRequest ? [] : loadConditionalSkills(userMessage);
 
   // Deduplicate (mode skills may overlap with conditional)
-  const allSkills = [...new Set([...modeSkills, ...conditional])];
+  const allSkills = visualizationRequest ? [] : [...new Set([...modeSkills, ...conditional])];
 
   const parts = [BASE_SYSTEM_PROMPT + (MODE_PROMPTS[mode] || "")];
+  if (forceTrendRouting) {
+    parts.push(
+      "User request requires time-series analysis.\n" +
+      "You MUST use the /api/trend endpoint via tool routing.\n" +
+      "Do not attempt single-year lookup."
+    );
+  }
   if (alwaysOn.length > 0) parts.push("---\n" + alwaysOn.join("\n\n---\n"));
   if (allSkills.length > 0) parts.push("---\n" + allSkills.join("\n\n---\n"));
   const prompt = parts.join("\n\n");
@@ -228,6 +292,93 @@ async function runCensusTool(toolInput) {
   }
 }
 
+function needsTrendRouting(text) {
+  const lower = String(text || "").toLowerCase();
+  return TREND_ROUTE_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+async function runTrendTool(req, toolInput) {
+  const { city, state, metric, startYear, endYear } = toolInput || {};
+
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  const proto = req.headers["x-forwarded-proto"] || "http";
+  const baseUrl = host ? `${proto}://${host}` : "http://localhost:3000";
+
+  try {
+    const response = await fetch(`${baseUrl}/api/trend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ city, state, metric, startYear, endYear }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { error: data?.error || "Trend endpoint returned an error." };
+    }
+
+    if (!Array.isArray(data)) {
+      return { error: "Trend endpoint returned invalid response format." };
+    }
+
+    return data;
+  } catch (err) {
+    return { error: String(err?.message || "Failed to fetch trend data.") };
+  }
+}
+
+function getLatestUserMessage(messages) {
+  return messages
+    .filter((m) => m.role === "user" && typeof m.content === "string")
+    .slice(-1)[0]?.content || "";
+}
+
+function toTitleCase(text) {
+  return String(text || "")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function inferTrendMetricLabel(userMessage) {
+  const text = String(userMessage || "").trim();
+  if (!text) return "Trend";
+
+  const parsed = parseQuery(text);
+  if (!parsed?.error && parsed.variable?.label) {
+    return parsed.variable.label;
+  }
+
+  const lower = text.toLowerCase();
+  const keywordMatch = QUERY_TYPES.find((metric) => lower.includes(metric.toLowerCase()));
+  if (keywordMatch) {
+    return toTitleCase(keywordMatch);
+  }
+
+  return "Trend";
+}
+
+function buildTrendChartPayload(trendPoints, city, state, metricLabel) {
+  return {
+    type: "trend_chart",
+    metric: metricLabel || "Trend",
+    location: `${city}, ${state}`,
+    points: trendPoints.map((point) => ({
+      year: Number(point.year),
+      numericValue: Number(point.numericValue),
+    })),
+    source: "U.S. Census Bureau ACS 5-Year Estimates",
+  };
+}
+
+function chartErrorPayload() {
+  return {
+    type: "error",
+    message: "Unable to generate chart data.",
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -246,7 +397,10 @@ export default async function handler(req, res) {
   try {
     let currentMessages = messages;
     let finalReply = null;
+    let trendChartPayload = null;
     const loopDeadline = Date.now() + LOOP_TIMEOUT_MS;
+    const initialUserMsg = getLatestUserMessage(messages);
+    const visualizationRequest = needsTrendRouting(initialUserMsg) || mode === "visualize";
 
     for (let i = 0; i < 5; i++) {
       // Enforce total loop timeout
@@ -255,18 +409,17 @@ export default async function handler(req, res) {
         return res.status(504).json({ error: "Request timed out. Try a simpler question." });
       }
 
-      const latestUserMsg = currentMessages
-        .filter(m => m.role === "user" && typeof m.content === "string")
-        .slice(-1)[0]?.content || "";
+      const latestUserMsg = getLatestUserMessage(currentMessages);
+      const forceTrendRouting = needsTrendRouting(latestUserMsg) || mode === "visualize";
 
-      const systemPrompt = buildSystemPrompt(latestUserMsg, mode);
+      const systemPrompt = buildSystemPrompt(latestUserMsg, mode, forceTrendRouting);
 
       // Race the Claude call against the remaining timeout budget
       const responsePromise = client.messages.create({
         model: MODEL,
         max_tokens: MAX_TOKENS,
         system: systemPrompt,
-        tools: [CENSUS_TOOL],
+        tools: [CENSUS_TOOL, TREND_TOOL],
         messages: currentMessages,
       });
 
@@ -292,7 +445,27 @@ export default async function handler(req, res) {
 
         const toolResults = await Promise.all(
           toolUseBlocks.map(async (block) => {
-            const result = await runCensusTool(block.input);
+            let result;
+            if (block.name === TREND_TOOL.name) {
+              const latestPrompt = getLatestUserMessage(currentMessages);
+              const inferredMetric = inferTrendMetricLabel(latestPrompt);
+              result = await runTrendTool(req, {
+                ...block.input,
+                metric: block.input?.metric || inferredMetric,
+              });
+              if (Array.isArray(result)) {
+                trendChartPayload = buildTrendChartPayload(
+                  result,
+                  String(block.input?.city || "").trim(),
+                  String(block.input?.state || "").trim(),
+                  inferTrendMetricLabel(latestPrompt)
+                );
+              }
+            } else if (block.name === CENSUS_TOOL.name) {
+              result = await runCensusTool(block.input);
+            } else {
+              result = { error: `Unsupported tool: ${block.name}` };
+            }
             // Safely serialize — catch any unexpected stringify failure
             let content;
             try {
@@ -321,18 +494,17 @@ export default async function handler(req, res) {
       break;
     }
 
-    if (!finalReply) {
+    if (!finalReply && !trendChartPayload) {
       // Loop exhausted without a text reply — likely repeated tool failures.
       // Make one final call with no tools so Claude must write a text response.
       console.warn("[chat] Loop exhausted without text reply — retrying with no tools.");
       try {
-        const latestUserMsg = currentMessages
-          .filter(m => m.role === "user" && typeof m.content === "string")
-          .slice(-1)[0]?.content || "";
+        const latestUserMsg = getLatestUserMessage(currentMessages);
         const fallbackResponse = await client.messages.create({
           model: MODEL,
           max_tokens: MAX_TOKENS,
-          system: buildSystemPrompt(latestUserMsg, mode) + "\n\nNote: live data lookup is unavailable. Answer from your general knowledge.",
+          system: buildSystemPrompt(latestUserMsg, mode, needsTrendRouting(latestUserMsg)) +
+            '\n\nNote: live data lookup is unavailable. Respond exactly: "I don’t have time-series Census access for that request yet."',
           messages,  // use original messages, not the tool-augmented ones
         });
         const textBlock = fallbackResponse.content.find(b => b.type === "text");
@@ -341,6 +513,13 @@ export default async function handler(req, res) {
         console.error("[chat] Fallback call failed:", fallbackErr);
         finalReply = "I wasn't able to retrieve that data right now. Please try again.";
       }
+    }
+
+    if (visualizationRequest) {
+      if (trendChartPayload) {
+        return res.status(200).json({ reply: JSON.stringify(trendChartPayload) });
+      }
+      return res.status(200).json({ reply: JSON.stringify(chartErrorPayload()) });
     }
 
     // For statistic mode, parse structured sections from the reply
