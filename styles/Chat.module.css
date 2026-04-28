@@ -116,9 +116,9 @@
 }
 
 .modeCard:hover {
-  border-color: var(--c-accent);
+  border-color: var(--accent);
   background: var(--c-surface);
-  box-shadow: 0 2px 12px var(--c-accent-glow);
+  box-shadow: 0 2px 12px var(--accent-glow);
   transform: translateY(-2px);
 }
 
