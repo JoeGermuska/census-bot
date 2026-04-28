@@ -169,7 +169,7 @@ function SendIcon() {
 }
 
 function BotAvatar() {
-  return <div className={`${styles.avatar} ${styles.avatarAssistant}`} aria-hidden>🤖</div>;
+  return <div className={`${styles.avatar} ${styles.avatarAssistant}`} aria-hidden>CB</div>;
 }
 
 function UserAvatar() {

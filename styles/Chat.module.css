@@ -1,6 +1,20 @@
-/* styles/Chat.module.css */
+/* styles/Chat.module.css — Claude-inspired theme for Ask Question page */
 
+/* ── Claude color tokens (scoped to chatPage) ────────────── */
 .chatPage {
+  --c-bg: #FAF9F5;
+  --c-surface: #FFFFFF;
+  --c-surface-2: #F3F1EC;
+  --c-border: #E8E5DE;
+  --c-border-hover: #D5D0C6;
+  --c-text: #2D2B28;
+  --c-text-dim: #6B6560;
+  --c-muted: #9B9489;
+  --c-accent: #DA7756;
+  --c-accent-soft: rgba(218, 119, 86, 0.12);
+  --c-accent-glow: rgba(218, 119, 86, 0.18);
+  --c-bot-bg: linear-gradient(135deg, #DA7756 0%, #C4633F 100%);
+
   display: flex;
   flex-direction: column;
   height: calc(100vh - 10.5rem);
@@ -9,6 +23,8 @@
   margin: 0 auto;
   max-width: 760px;
   width: 100%;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  color: var(--c-text);
 }
 
 /* ── Header ─────────────────────────────────────────────── */
@@ -28,22 +44,22 @@
 
 .title {
   font-size: 1.35rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--text);
+  color: var(--c-text);
 }
 
 .subtitle {
   font-size: 0.82rem;
-  color: var(--muted);
+  color: var(--c-muted);
 }
 
 .clearBtn {
   padding: 0.42rem 0.95rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-dim);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -52,9 +68,9 @@
 }
 
 .clearBtn:hover {
-  color: var(--text);
-  border-color: var(--border-hover);
-  background: var(--surface-2);
+  color: var(--c-text);
+  border-color: var(--c-border-hover);
+  background: var(--c-surface-2);
 }
 
 /* ── Mode picker ────────────────────────────────────────── */
@@ -71,7 +87,7 @@
 .modePickerLabel {
   font-size: 1rem;
   font-weight: 600;
-  color: var(--text);
+  color: var(--c-text);
 }
 
 .modeGrid {
@@ -88,18 +104,18 @@
   align-items: center;
   gap: 0.55rem;
   padding: 1.4rem 1rem;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
   cursor: pointer;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
   text-align: center;
 }
 
 .modeCard:hover {
-  border-color: var(--accent);
-  background: var(--surface-2);
-  box-shadow: 0 0 18px var(--accent-glow);
+  border-color: var(--c-accent);
+  background: var(--c-surface);
+  box-shadow: 0 2px 12px var(--c-accent-glow);
   transform: translateY(-2px);
 }
 
@@ -111,12 +127,12 @@
 .modeLabel {
   font-size: 0.88rem;
   font-weight: 700;
-  color: var(--text);
+  color: var(--c-text);
 }
 
 .modeDesc {
   font-size: 0.73rem;
-  color: var(--muted);
+  color: var(--c-muted);
   line-height: 1.4;
 }
 
@@ -127,9 +143,9 @@
   gap: 0.4rem;
   padding: 0.3rem 0.8rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-dim);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-dim);
   font-size: 0.75rem;
   font-weight: 600;
   margin-bottom: 0.4rem;
@@ -140,9 +156,9 @@
 /* ── Limit notice ───────────────────────────────────────── */
 .limitNotice {
   font-size: 0.78rem;
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--border);
+  color: var(--c-muted);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
   border-radius: 8px;
   padding: 0.5rem 0.9rem;
   margin-bottom: 0.5rem;
@@ -151,7 +167,7 @@
 }
 
 .limitNotice strong {
-  color: var(--text-dim);
+  color: var(--c-text-dim);
 }
 
 /* ── Message list ────────────────────────────────────────── */
@@ -160,14 +176,14 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: 1rem;
   padding: 0.5rem 0 1rem;
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
 }
 
 .messageList:hover {
-  scrollbar-color: var(--border) transparent;
+  scrollbar-color: var(--c-border) transparent;
 }
 
 /* ── Empty state ─────────────────────────────────────────── */
@@ -188,7 +204,7 @@
 
 .emptyText {
   font-size: 1rem;
-  color: var(--muted);
+  color: var(--c-muted);
   text-align: center;
   max-width: 320px;
   line-height: 1.55;
@@ -205,9 +221,9 @@
 .suggestion {
   padding: 0.5rem 1rem;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-dim);
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-dim);
   font-size: 0.82rem;
   font-weight: 500;
   cursor: pointer;
@@ -216,10 +232,9 @@
 }
 
 .suggestion:hover {
-  color: var(--text);
-  border-color: var(--accent);
-  background: var(--surface-2);
-  box-shadow: 0 0 12px var(--accent-glow);
+  color: var(--c-text);
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
 }
 
 /* ── Individual messages ─────────────────────────────────── */
@@ -240,20 +255,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
+  font-size: 0.65rem;
+  font-weight: 800;
   flex-shrink: 0;
   margin-top: 2px;
+  letter-spacing: -0.02em;
 }
 
 .avatarAssistant {
-  background: linear-gradient(135deg, #9333ea 0%, #2563eb 100%);
+  background: var(--c-bot-bg);
   color: #fff;
 }
 
 .avatarUser {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  color: var(--c-muted);
 }
 
 .bubble {
@@ -261,40 +278,34 @@
   padding: 0.75rem 1rem;
   border-radius: 16px;
   font-size: 0.92rem;
-  line-height: 1.6;
+  line-height: 1.65;
   word-break: break-word;
 }
 
 .bubbleAssistant {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  color: var(--c-text);
   border-top-left-radius: 4px;
 }
 
 .bubbleUser {
-  background: linear-gradient(135deg, #1e3a5f 0%, #1a2f50 100%);
-  border: 1px solid rgba(77, 184, 255, 0.2);
-  color: var(--text);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  color: var(--c-text);
   border-top-right-radius: 4px;
 }
 
-:global(html[data-theme="light"]) .bubbleUser {
-  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
-  border-color: rgba(98, 182, 255, 0.35);
-  color: #2d3748;
-}
-
 .bubbleError {
-  background: rgba(252, 129, 129, 0.08);
-  border-color: rgba(252, 129, 129, 0.3);
-  color: var(--error);
+  background: #FEF2F2;
+  border-color: #FECACA;
+  color: #B91C1C;
 }
 
 /* ── Markdown elements inside bubbles ────────────────────── */
-.h1 { font-weight: 700; font-size: 1.02rem; margin: 0.5rem 0 0.15rem; color: var(--text); }
-.h2 { font-weight: 700; font-size: 0.96rem; margin: 0.45rem 0 0.1rem; color: var(--text); }
-.h3 { font-weight: 700; font-size: 0.92rem; margin: 0.4rem 0 0.1rem; color: var(--text); }
+.h1 { font-weight: 700; font-size: 1.02rem; margin: 0.5rem 0 0.15rem; color: var(--c-text); }
+.h2 { font-weight: 700; font-size: 0.96rem; margin: 0.45rem 0 0.1rem; color: var(--c-text); }
+.h3 { font-weight: 700; font-size: 0.92rem; margin: 0.4rem 0 0.1rem; color: var(--c-text); }
 
 .listItem {
   display: flex;
@@ -304,31 +315,31 @@
 }
 
 .bullet {
-  color: var(--accent);
+  color: var(--c-accent);
   font-weight: 700;
   flex-shrink: 0;
 }
 
 .inlineCode {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
   border-radius: 4px;
   padding: 0.1rem 0.35rem;
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
   font-size: 0.83em;
-  color: var(--accent);
+  color: var(--c-accent);
 }
 
 /* ── More info (methodology + caveats) ──────────────────── */
 .moreInfoWrap {
   margin-top: 0.55rem;
   padding-top: 0.5rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--c-border);
 }
 
 .methodology {
   font-size: 0.78rem;
-  color: var(--muted);
+  color: var(--c-muted);
   line-height: 1.5;
   margin: 0 0 0.35rem;
   font-style: italic;
@@ -340,9 +351,9 @@
   gap: 0.3rem;
   padding: 0.25rem 0.6rem;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--c-border);
   background: transparent;
-  color: var(--accent);
+  color: var(--c-accent);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -350,19 +361,19 @@
 }
 
 .moreInfoBtn:hover {
-  background: var(--surface-2);
-  border-color: var(--accent);
+  background: var(--c-accent-soft);
+  border-color: var(--c-accent);
 }
 
 .caveatsBox {
   margin-top: 0.4rem;
   padding: 0.55rem 0.7rem;
   border-radius: 8px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
   font-size: 0.8rem;
   line-height: 1.55;
-  color: var(--text-dim);
+  color: var(--c-text-dim);
 }
 
 .caveatsBox .listItem {
@@ -374,7 +385,7 @@
   overflow-x: auto;
   margin: 0.4rem 0;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--c-border);
 }
 
 .table {
@@ -388,16 +399,16 @@
   text-align: left;
   padding: 0.45rem 0.65rem;
   font-weight: 700;
-  background: var(--surface-2);
-  color: var(--text);
-  border-bottom: 1px solid var(--border);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  border-bottom: 1px solid var(--c-border);
   white-space: nowrap;
 }
 
 .table td {
   padding: 0.4rem 0.65rem;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-dim);
+  border-bottom: 1px solid var(--c-border);
+  color: var(--c-text-dim);
 }
 
 .table tbody tr:last-child td {
@@ -405,11 +416,7 @@
 }
 
 .table tbody tr:hover {
-  background: rgba(77, 184, 255, 0.04);
-}
-
-:global(html[data-theme="light"]) .table tbody tr:hover {
-  background: rgba(45, 55, 72, 0.03);
+  background: var(--c-accent-soft);
 }
 
 /* ── Typing indicator ────────────────────────────────────── */
@@ -420,8 +427,8 @@
 }
 
 .typingBubble {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
   border-radius: 16px;
   border-top-left-radius: 4px;
   padding: 0.75rem 1rem;
@@ -434,7 +441,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--muted);
+  background: var(--c-muted);
   animation: bounce 1.2s ease-in-out infinite;
 }
 
@@ -449,9 +456,9 @@
 /* ── Limit reached ──────────────────────────────────────── */
 .limitReached {
   font-size: 0.82rem;
-  color: var(--muted);
-  background: var(--surface);
-  border: 1px solid var(--border);
+  color: var(--c-muted);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
   border-radius: 10px;
   padding: 0.75rem 1rem;
   text-align: center;
@@ -459,30 +466,30 @@
 }
 
 .limitReached strong {
-  color: var(--text);
+  color: var(--c-text);
 }
 
 /* ── Input area ──────────────────────────────────────────── */
 .inputArea {
   flex-shrink: 0;
   padding: 0.75rem 0 1.25rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--c-border);
 }
 
 .inputRow {
   display: flex;
   align-items: flex-end;
   gap: 0.6rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
   border-radius: 14px;
   padding: 0.55rem 0.55rem 0.55rem 1rem;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .inputRow:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px var(--c-accent-glow);
 }
 
 .textarea {
@@ -490,7 +497,7 @@
   background: transparent;
   border: none;
   outline: none;
-  color: var(--text);
+  color: var(--c-text);
   font-size: 0.92rem;
   font-family: inherit;
   line-height: 1.55;
@@ -502,7 +509,7 @@
 }
 
 .textarea::placeholder {
-  color: var(--muted);
+  color: var(--c-muted);
 }
 
 .sendBtn {
@@ -510,7 +517,7 @@
   height: 36px;
   border-radius: 10px;
   border: none;
-  background: linear-gradient(135deg, #9333ea 0%, #2563eb 100%);
+  background: var(--c-bot-bg);
   color: #fff;
   display: flex;
   align-items: center;
@@ -521,7 +528,7 @@
 }
 
 .sendBtn:hover:not(:disabled) {
-  filter: brightness(1.2);
+  filter: brightness(1.1);
   transform: scale(1.06);
 }
 
@@ -532,7 +539,7 @@
 
 .inputHint {
   font-size: 0.73rem;
-  color: var(--muted);
+  color: var(--c-muted);
   margin-top: 0.45rem;
   padding: 0 0.25rem;
   opacity: 0.7;
