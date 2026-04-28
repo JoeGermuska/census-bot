@@ -1,15 +1,15 @@
 /* styles/Chat.module.css — Claude-inspired theme for Ask Question page */
 
-/* ── Claude color tokens (scoped to chatPage) ────────────── */
+/* ── Color tokens (scoped to chatPage) — inherit from global theme ────────── */
 .chatPage {
-  --c-bg: #FAF9F5;
-  --c-surface: #FFFFFF;
-  --c-surface-2: #F3F1EC;
-  --c-border: #E8E5DE;
-  --c-border-hover: #D5D0C6;
-  --c-text: #2D2B28;
-  --c-text-dim: #6B6560;
-  --c-muted: #9B9489;
+  --c-bg: var(--bg);
+  --c-surface: var(--surface);
+  --c-surface-2: var(--surface-2);
+  --c-border: var(--border);
+  --c-border-hover: var(--border-hover);
+  --c-text: var(--text);
+  --c-text-dim: var(--text-dim);
+  --c-muted: var(--muted);
   --c-accent: #DA7756;
   --c-accent-soft: rgba(218, 119, 86, 0.12);
   --c-accent-glow: rgba(218, 119, 86, 0.18);
@@ -300,9 +300,9 @@
 }
 
 .bubbleError {
-  background: #FEF2F2;
-  border-color: #FECACA;
-  color: #B91C1C;
+  background: rgba(252, 129, 129, 0.08);
+  border-color: rgba(252, 129, 129, 0.3);
+  color: var(--error);
 }
 
 /* ── Markdown elements inside bubbles ────────────────────── */

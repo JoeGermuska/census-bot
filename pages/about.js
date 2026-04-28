@@ -72,7 +72,7 @@ export default function About() {
           <p className={landing.creditsBuilt}>
             Built at{" "}
             <a
-              href="https://knightlab.northwestern.edu"
+              href="https://studio.knightlab.com/projects/censusbot/"
               className={landing.creditsLink}
               target="_blank"
               rel="noopener noreferrer"
