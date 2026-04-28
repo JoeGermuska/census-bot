@@ -171,14 +171,9 @@ CRITICAL TOOL RULES:
 - NEVER describe how to fetch data externally.
 
 CRITICAL VISUALIZATION OUTPUT RULES:
-- For graph/chart/trend/change-over-time/historical-comparison/visualization requests, output ONLY JSON in this exact shape:
-  {
-    "type": "trend_chart",
-    "metric": string,
-    "location": string,
-    "points": [{ "year": number, "numericValue": number }],
-    "source": string
-  }
+- For graph/chart/trend/change-over-time/historical-comparison/visualization requests, you MUST call get_census_trend.
+- For comparisons (e.g. "compare Austin and Dallas"), call get_census_trend ONCE PER CITY in parallel — the server combines them into a multi-line chart automatically.
+- The server constructs the final chart JSON from tool results. Your job is only to make the right tool calls; do not hand-author chart JSON.
 - Do NOT include any explanation text with chart JSON.
 - Do NOT output CSV.
 - Do NOT output markdown tables.
@@ -219,9 +214,9 @@ const MODE_SKILLS = {
     path.join(SKILLS_DIR, "acs-geography", "SKILL.md"),
   ],
   visualize: [
-    // Visualization mode: data interpretation + table selection for chart planning
+    // Visualization mode: data interpretation + table selection + react chart contract
+    path.join(SKILLS_DIR, "acs-react-chart", "SKILL.md"),
     path.join(SKILLS_DIR, "acs-data-interpreter", "SKILL.md"),
-    path.join(SKILLS_DIR, "acs-table-selector", "SKILL.md"),
     path.join(SKILLS_DIR, "acs-geography", "SKILL.md"),
     path.join(SKILLS_DIR, "acs-temporal-caveats", "SKILL.md"),
   ],
@@ -234,7 +229,6 @@ const MODE_PROMPTS = {
 };
 
 function buildSystemPrompt(userMessage, mode, forceTrendRouting = false) {
-  const visualizationRequest = needsTrendRouting(userMessage) || mode === "visualize";
   const alwaysOn = loadAlwaysOnSkills();
 
   // Load mode-specific skills
@@ -242,10 +236,10 @@ function buildSystemPrompt(userMessage, mode, forceTrendRouting = false) {
   const modeSkills = modeFiles.map(readSkillCached).filter(Boolean);
 
   // Also load keyword-conditional skills
-  const conditional = visualizationRequest ? [] : loadConditionalSkills(userMessage);
+  const conditional = loadConditionalSkills(userMessage);
 
   // Deduplicate (mode skills may overlap with conditional)
-  const allSkills = visualizationRequest ? [] : [...new Set([...modeSkills, ...conditional])];
+  const allSkills = [...new Set([...modeSkills, ...conditional])];
 
   const parts = [BASE_SYSTEM_PROMPT + (MODE_PROMPTS[mode] || "")];
   if (forceTrendRouting) {
@@ -369,16 +363,28 @@ function inferTrendMetricLabel(userMessage) {
   return "Trend";
 }
 
-function buildTrendChartPayload(trendPoints, city, state, metricLabel) {
+function buildTrendChartPayload(trendSeries, metricLabel) {
+  // trendSeries: [{ label, points: [{year, numericValue}] }]
+  const allYears = trendSeries.flatMap((s) => s.points.map((p) => p.year));
+  const yearRange = allYears.length
+    ? `${Math.min(...allYears)}–${Math.max(...allYears)}`
+    : "";
+
   return {
     type: "trend_chart",
+    chartType: trendSeries.length > 1 ? "multi_line" : "line",
     metric: metricLabel || "Trend",
-    location: `${city}, ${state}`,
-    points: trendPoints.map((point) => ({
-      year: Number(point.year),
-      numericValue: Number(point.numericValue),
+    location: trendSeries.map((s) => s.label).join(" vs "),
+    series: trendSeries.map((s) => ({
+      label: s.label,
+      points: s.points.map((p) => ({
+        year: Number(p.year),
+        numericValue: Number(p.numericValue),
+      })),
     })),
-    source: "U.S. Census Bureau ACS 5-Year Estimates",
+    source: yearRange
+      ? `U.S. Census Bureau ACS 5-Year Estimates (${yearRange})`
+      : "U.S. Census Bureau ACS 5-Year Estimates",
   };
 }
 
@@ -407,7 +413,7 @@ export default async function handler(req, res) {
   try {
     let currentMessages = messages;
     let finalReply = null;
-    let trendChartPayload = null;
+    const trendSeries = []; // collected across tool calls for multi-line comparisons
     const loopDeadline = Date.now() + LOOP_TIMEOUT_MS;
     const initialUserMsg = getLatestUserMessage(messages);
     const visualizationRequest = needsTrendRouting(initialUserMsg) || mode === "visualize";
@@ -464,12 +470,15 @@ export default async function handler(req, res) {
                 metric: block.input?.metric || inferredMetric,
               });
               if (Array.isArray(result)) {
-                trendChartPayload = buildTrendChartPayload(
-                  result,
-                  String(block.input?.city || "").trim(),
-                  String(block.input?.state || "").trim(),
-                  inferTrendMetricLabel(latestPrompt)
-                );
+                const city = String(block.input?.city || "").trim();
+                const state = String(block.input?.state || "").trim();
+                trendSeries.push({
+                  label: [city, state].filter(Boolean).join(", ") || "Series",
+                  points: result.map((p) => ({
+                    year: Number(p.year),
+                    numericValue: Number(p.numericValue),
+                  })),
+                });
               }
             } else if (block.name === CENSUS_TOOL.name) {
               result = await runCensusTool(block.input);
@@ -504,7 +513,7 @@ export default async function handler(req, res) {
       break;
     }
 
-    if (!finalReply && !trendChartPayload) {
+    if (!finalReply && trendSeries.length === 0) {
       // Loop exhausted without a text reply — likely repeated tool failures.
       // Make one final call with no tools so Claude must write a text response.
       console.warn("[chat] Loop exhausted without text reply — retrying with no tools.");
@@ -526,8 +535,10 @@ export default async function handler(req, res) {
     }
 
     if (visualizationRequest) {
-      if (trendChartPayload) {
-        return res.status(200).json({ reply: JSON.stringify(trendChartPayload) });
+      if (trendSeries.length > 0) {
+        const metricLabel = inferTrendMetricLabel(initialUserMsg);
+        const payload = buildTrendChartPayload(trendSeries, metricLabel);
+        return res.status(200).json({ reply: JSON.stringify(payload) });
       }
       return res.status(200).json({ reply: JSON.stringify(chartErrorPayload()) });
     }

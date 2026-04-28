@@ -1,34 +1,29 @@
 // components/TrendChart.js
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import homeStyles from "../styles/Home.module.css";
 
+const SERIES_COLORS = ["var(--accent)", "#4db8ff", "#9d8cff", "#46c39c", "#f1a26d"];
+
+function formatValueForMetric(rawValue, metric) {
+  if (!Number.isFinite(rawValue)) return "N/A";
+  if (/income|rent|value/i.test(metric)) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(rawValue);
+  }
+  if (/rate|percent|poverty/i.test(metric)) return `${rawValue.toFixed(2)}%`;
+  if (/age/i.test(metric)) return `${rawValue.toFixed(0)} years`;
+  if (/commute|travel time|minute/i.test(metric)) return `${rawValue.toFixed(0)} minutes`;
+  return new Intl.NumberFormat("en-US").format(rawValue);
+}
+
 function CustomTooltip({ active, payload, label, metric }) {
   if (!active || !payload?.length) return null;
-  const point = payload[0]?.payload;
-  const rawValue = point?.numericValue;
-  const hasValue = Number.isFinite(rawValue);
-
-  let displayValue = "N/A";
-  if (hasValue) {
-    if (/income|rent|value/i.test(metric)) {
-      displayValue = new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: 0,
-      }).format(rawValue);
-    } else if (/rate|percent|poverty/i.test(metric)) {
-      displayValue = `${rawValue.toFixed(2)}%`;
-    } else if (/age/i.test(metric)) {
-      displayValue = `${rawValue.toFixed(0)} years`;
-    } else if (/commute|travel time|minute/i.test(metric)) {
-      displayValue = `${rawValue.toFixed(0)} minutes`;
-    } else {
-      displayValue = new Intl.NumberFormat("en-US").format(rawValue);
-    }
-  }
 
   return (
     <div style={{
@@ -39,20 +34,48 @@ function CustomTooltip({ active, payload, label, metric }) {
       fontSize: 13,
     }}>
       <div style={{ color: "var(--chart-muted)", marginBottom: 4 }}>{label}</div>
-      <div style={{ color: "var(--text)", fontWeight: 600 }}>
-        {displayValue}
-      </div>
+      {payload.map((entry, i) => (
+        <div key={i} style={{ color: entry.color, fontWeight: 600 }}>
+          {payload.length > 1 ? `${entry.name}: ` : ""}
+          {formatValueForMetric(entry.value, metric)}
+        </div>
+      ))}
       <div style={{ color: "var(--chart-faint)", fontSize: 11, marginTop: 2 }}>{metric}</div>
     </div>
   );
 }
 
+// Convert input to series[] regardless of legacy {points} or new {series} shape
+function normalizeSeries(data) {
+  if (Array.isArray(data.series) && data.series.length > 0) return data.series;
+  if (Array.isArray(data.points)) {
+    return [{ label: data.location || "Series", points: data.points }];
+  }
+  return [];
+}
+
+// Pivot series into rows: [{year, [seriesLabel]: numericValue}]
+function pivotSeriesToRows(series) {
+  const yearMap = new Map();
+  series.forEach((s) => {
+    s.points.forEach((p) => {
+      if (p.numericValue === null || p.numericValue === undefined) return;
+      const row = yearMap.get(p.year) || { year: p.year };
+      row[s.label] = p.numericValue;
+      yearMap.set(p.year, row);
+    });
+  });
+  return Array.from(yearMap.values()).sort((a, b) => a.year - b.year);
+}
+
 export default function TrendChart({ data, expanded = false }) {
   if (!data) return null;
 
-  const { metric, location, points, source } = data;
-  const validPoints = points.filter(p => p.numericValue !== null);
+  const { metric, location, source } = data;
+  const series = normalizeSeries(data);
+  const rows = pivotSeriesToRows(series);
   const chartHeight = expanded ? 420 : 200;
+  const isMulti = series.length > 1;
 
   return (
     <div
@@ -78,11 +101,11 @@ export default function TrendChart({ data, expanded = false }) {
         📍 {location}
       </div>
 
-      {validPoints.length === 0 ? (
+      {rows.length === 0 ? (
         <div style={{ color: "var(--chart-empty)", fontSize: 14 }}>No trend data available.</div>
       ) : (
         <ResponsiveContainer width="100%" height={chartHeight}>
-          <LineChart data={validPoints} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+          <LineChart data={rows} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
             <XAxis
               dataKey="year"
@@ -100,14 +123,23 @@ export default function TrendChart({ data, expanded = false }) {
               }
             />
             <Tooltip content={<CustomTooltip metric={metric} />} />
-            <Line
-              type="monotone"
-              dataKey="numericValue"
-              stroke="var(--accent)"
-              strokeWidth={2.5}
-              dot={{ fill: "var(--accent)", r: 4, strokeWidth: 0 }}
-              activeDot={{ r: 6, fill: "var(--accent)" }}
-            />
+            {isMulti && <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />}
+            {series.map((s, i) => {
+              const color = SERIES_COLORS[i % SERIES_COLORS.length];
+              return (
+                <Line
+                  key={s.label}
+                  type="monotone"
+                  dataKey={s.label}
+                  name={s.label}
+                  stroke={color}
+                  strokeWidth={2.5}
+                  dot={{ fill: color, r: 4, strokeWidth: 0 }}
+                  activeDot={{ r: 6, fill: color }}
+                  connectNulls
+                />
+              );
+            })}
           </LineChart>
         </ResponsiveContainer>
       )}
