@@ -13,6 +13,37 @@ import {
   CURRENT_ACS_YEAR,
 } from "../../lib/censusConstants";
 
+// Per-metric accent colors and icons
+function getMetricMeta(metricLabel) {
+  const l = (metricLabel || "").toLowerCase();
+  if (l.includes("income") || l.includes("per capita")) return { color: "#4db8ff", icon: "💰" };
+  if (l.includes("population")) return { color: "#66ffcc", icon: "👥" };
+  if (l.includes("home value") || l.includes("housing value")) return { color: "#a855f7", icon: "🏠" };
+  if (l.includes("rent")) return { color: "#c084fc", icon: "🏢" };
+  if (l.includes("housing unit")) return { color: "#818cf8", icon: "🏘️" };
+  if (l.includes("poverty")) return { color: "#f97316", icon: "📊" };
+  if (l.includes("unemployment")) return { color: "#fb923c", icon: "📉" };
+  if (l.includes("employment")) return { color: "#34d399", icon: "📈" };
+  if (l.includes("age")) return { color: "#fbbf24", icon: "📅" };
+  if (l.includes("commute") || l.includes("travel")) return { color: "#ec4899", icon: "🚇" };
+  if (l.includes("bachelor") || l.includes("education")) return { color: "#8b5cf6", icon: "🎓" };
+  return { color: "#4db8ff", icon: "📌" };
+}
+
+function CardSpinner() {
+  return (
+    <span style={{
+      display: "inline-block",
+      width: 13, height: 13,
+      border: "2px solid rgba(77,184,255,0.3)",
+      borderTopColor: "var(--accent)",
+      borderRadius: "50%",
+      animation: "spin 0.6s linear infinite",
+      verticalAlign: "middle",
+    }} />
+  );
+}
+
 export default function ExploreResults() {
   const router = useRouter();
   const targetProgress = 100;
@@ -22,6 +53,8 @@ export default function ExploreResults() {
   const [loading, setLoading] = useState(false);
   const [trendByQuery, setTrendByQuery] = useState({});
   const [trendLoadingKey, setTrendLoadingKey] = useState(null);
+  const [showTrendMap, setShowTrendMap] = useState({});
+
   const fromProgress = useMemo(() => {
     const raw = router.query.from;
     const val = Number(Array.isArray(raw) ? raw[0] : raw);
@@ -47,7 +80,6 @@ export default function ExploreResults() {
       router.replace("/explore/location");
       return;
     }
-
     try {
       const raw = sessionStorage.getItem(EXPLORE_METRICS_STORAGE_KEY);
       const parsed = raw ? JSON.parse(raw) : [];
@@ -76,6 +108,7 @@ export default function ExploreResults() {
       setLoading(true);
       setResults([]);
       setTrendByQuery({});
+      setShowTrendMap({});
 
       const entries = await Promise.all(
         metrics.map(async metric => {
@@ -87,9 +120,7 @@ export default function ExploreResults() {
               body: JSON.stringify({ query }),
             });
             const data = await res.json();
-            if (!res.ok) {
-              return { query, metric, error: data.error || "Request failed" };
-            }
+            if (!res.ok) return { query, metric, error: data.error || "Request failed" };
             return { query, metric, result: data };
           } catch {
             return { query, metric, error: "Network error — check your connection." };
@@ -104,10 +135,7 @@ export default function ExploreResults() {
     }
 
     runQueries();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [ready, metrics, city, stateName]);
 
   async function handleTrend(query, metricLabel) {
@@ -134,19 +162,26 @@ export default function ExploreResults() {
           metric: metricLabel || "Trend",
           location: `${city}, ${stateName}`,
           points: Array.isArray(data)
-            ? data.map((point) => ({
-                year: Number(point.year),
-                numericValue: Number(point.numericValue),
-              }))
+            ? data.map(p => ({ year: Number(p.year), numericValue: Number(p.numericValue) }))
             : [],
           source: "U.S. Census Bureau ACS 5-Year Estimates",
         };
         setTrendByQuery(prev => ({ ...prev, [query]: chartData }));
+        setShowTrendMap(prev => ({ ...prev, [query]: true }));
       }
     } catch {
       setTrendByQuery(prev => ({ ...prev, [query]: { error: "Network error" } }));
     } finally {
       setTrendLoadingKey(null);
+    }
+  }
+
+  function toggleTrend(query, metricLabel) {
+    const trend = trendByQuery[query];
+    if (!trend) {
+      handleTrend(query, metricLabel);
+    } else {
+      setShowTrendMap(prev => ({ ...prev, [query]: !prev[query] }));
     }
   }
 
@@ -198,9 +233,7 @@ export default function ExploreResults() {
                       EXPLORE_LOCATION_STORAGE_KEY,
                       JSON.stringify({ state: stateName, city }),
                     );
-                  } catch {
-                    /* ignore */
-                  }
+                  } catch { /* ignore */ }
                   router.push({
                     pathname: "/explore/location",
                     query: { from: targetProgress, state: stateName, city, restore: 1 },
@@ -217,9 +250,7 @@ export default function ExploreResults() {
                   try {
                     sessionStorage.removeItem(EXPLORE_METRICS_STORAGE_KEY);
                     sessionStorage.removeItem(EXPLORE_LOCATION_STORAGE_KEY);
-                  } catch {
-                    /* ignore */
-                  }
+                  } catch { /* ignore */ }
                   router.push({ pathname: "/explore", query: { from: 0 } });
                 }}
               >
@@ -231,58 +262,103 @@ export default function ExploreResults() {
           <section className={ex.resultsSection} aria-label="Query results">
             <h2 className={ex.resultsTitle}>Results</h2>
             {loading ? (
-              <p className={ex.hint}>Loading results…</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+                {Array.from({ length: metrics.length || 3 }).map((_, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      height: 130,
+                      borderRadius: 16,
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      opacity: 0.5 + (i * 0.15),
+                      animation: "pulse 1.4s ease-in-out infinite",
+                      animationDelay: `${i * 120}ms`,
+                    }}
+                  />
+                ))}
+              </div>
             ) : (
-              <div className={ex.resultStack}>
-                {results.map(row => {
+              <div className={ex.resultGrid}>
+                {results.map((row, index) => {
                   if (row.error) {
                     return (
-                      <div key={row.query} className={homeStyles.error}>
+                      <div
+                        key={row.query}
+                        className={homeStyles.error}
+                        style={{
+                          borderRadius: 14,
+                          animation: `cardReveal 0.5s cubic-bezier(0.22,1,0.36,1) both`,
+                          animationDelay: `${index * 70}ms`,
+                        }}
+                      >
                         <span className={homeStyles.errorIcon}>⚠</span>
                         <div>
-                          <strong>{row.metric}</strong>
-                          {": "}
-                          {row.error}
+                          <strong>{row.metric}</strong>: {row.error}
                         </div>
                       </div>
                     );
                   }
+
                   const { result } = row;
+                  const { color, icon } = getMetricMeta(result.metric);
                   const trend = trendByQuery[row.query];
                   const trendBusy = trendLoadingKey === row.query;
+                  const chartVisible = showTrendMap[row.query] && trend && !trend.error;
+                  const hasTrendError = trend?.error != null;
 
                   return (
-                    <div key={row.query}>
-                      <div
-                        className={homeStyles.result}
-                      >
-                        <div className={homeStyles.resultLabel}>{result.metric}</div>
-                        <div
-                          className={homeStyles.resultValue}
-                          style={{ textShadow: "var(--result-value-shadow)" }}
-                        >
-                          {result.value}
-                        </div>
-                        <div className={homeStyles.resultLocation}>📍 {result.location}</div>
-                        <div className={homeStyles.resultSource}>{result.source}</div>
+                    <div
+                      key={row.query}
+                      className={ex.statCard}
+                      style={{
+                        "--card-accent": color,
+                        animationDelay: `${index * 70}ms`,
+                      }}
+                    >
+                      {/* Metric label + icon */}
+                      <div className={ex.statMeta}>
+                        <span className={ex.statIcon}>{icon}</span>
+                        <span className={ex.statLabel}>{result.metric}</span>
                       </div>
+
+                      {/* Main value */}
+                      <div className={ex.statValue}>{result.value}</div>
+
+                      {/* Location */}
+                      <div className={ex.statLocation}>📍 {result.location}</div>
+
+                      {/* Divider + chart toggle */}
+                      <div className={ex.statDivider} />
                       <button
                         type="button"
-                        className={`${homeStyles.button} ${homeStyles.trendButton}`}
-                        style={{ marginTop: 10 }}
+                        className={`${ex.statChartBtn}${chartVisible ? ` ${ex.statChartBtnActive}` : ""}`}
                         disabled={trendBusy}
-                        onClick={() => handleTrend(row.query, result.metric)}
+                        onClick={() => toggleTrend(row.query, result.metric)}
                       >
-                        {trendBusy ? <span className={homeStyles.spinner} /> : "📈 Show Chart"}
+                        {trendBusy
+                          ? <><CardSpinner /> Loading chart…</>
+                          : chartVisible
+                            ? "↑ Hide Chart"
+                            : "📈 Show Trend"}
                       </button>
-                      {trend && trend.error != null && (
-                        <p className={ex.hint} style={{ color: "var(--error)" }}>
+
+                      {/* Inline chart */}
+                      {chartVisible && (
+                        <div className={ex.inlineChart}>
+                          <TrendChart data={trend} inline />
+                        </div>
+                      )}
+
+                      {/* Trend error */}
+                      {hasTrendError && (
+                        <p className={ex.hint} style={{ color: "var(--error)", marginTop: 8 }}>
                           {typeof trend.error === "string" ? trend.error : "Could not load trend."}
                         </p>
                       )}
-                      {trend && !trend.error && trend.points && (
-                        <TrendChart data={trend} />
-                      )}
+
+                      {/* Source */}
+                      <div className={ex.statSource}>{result.source}</div>
                     </div>
                   );
                 })}
@@ -294,4 +370,3 @@ export default function ExploreResults() {
     </>
   );
 }
-

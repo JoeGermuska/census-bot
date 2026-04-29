@@ -1,11 +1,8 @@
 // pages/api/trend.js
 import { fetchCensusVariable } from "../../lib/censusApi";
 import { parseQuery, VARIABLE_MAP } from "../../lib/censusTranslator";
+import { hasRateConfig, getRateDenominator, getRateScale } from "../../lib/censusRates";
 
-const POVERTY_VARIABLE = "B17001_002E";
-const POVERTY_UNIVERSE_VARIABLE = "B17001_001E"; // population for whom poverty status is determined
-const UNEMPLOYMENT_VARIABLE = "B23025_005E";
-const LABOR_FORCE_VARIABLE = "B23025_003E";      // civilian labor force (unemployment denominator)
 const MIN_YEAR = 2009;
 
 function isValidYear(value) {
@@ -33,13 +30,15 @@ function resolveVariableFromMetric(metric) {
 }
 
 function shouldComputeRate(variableId) {
-  return variableId === POVERTY_VARIABLE || variableId === UNEMPLOYMENT_VARIABLE;
+  return hasRateConfig(variableId);
 }
 
 function getDenominatorVariable(variableId) {
-  if (variableId === POVERTY_VARIABLE) return POVERTY_UNIVERSE_VARIABLE;
-  if (variableId === UNEMPLOYMENT_VARIABLE) return LABOR_FORCE_VARIABLE;
-  return null;
+  return getRateDenominator(variableId);
+}
+
+function getScale(variableId) {
+  return getRateScale(variableId) ?? 100;
 }
 
 export default async function handler(req, res) {
@@ -105,7 +104,7 @@ export default async function handler(req, res) {
           throw new Error(`Invalid denominator value for ${variable.id} in ${city}, ${state} (${year}).`);
         }
 
-        numericValue = (metricValue / denominator) * 100;
+        numericValue = (metricValue / denominator) * getScale(variable.id);
       }
 
       points.push({ year, numericValue: Number(numericValue.toFixed(2)) });

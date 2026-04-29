@@ -360,6 +360,168 @@
   gap: 1rem;
 }
 
+/* ── Result grid & animated stat cards ── */
+.resultGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.1rem;
+}
+
+@media (max-width: 520px) {
+  .resultGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.statCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.4rem 1.5rem 1.25rem;
+  position: relative;
+  overflow: hidden;
+  opacity: 0;
+  animation: cardReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.statCard::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--card-accent, var(--accent));
+  border-radius: 16px 0 0 16px;
+}
+
+.statCard:hover {
+  border-color: rgba(77, 184, 255, 0.32);
+  box-shadow: var(--result-glow), 0 8px 32px rgba(0, 0, 0, 0.15);
+  transform: translateY(-3px);
+}
+
+:global(html[data-theme="light"]) .statCard:hover {
+  border-color: rgba(37, 99, 235, 0.3);
+}
+
+@keyframes cardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.statMeta {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+.statIcon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.statLabel {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--card-accent, var(--accent));
+}
+
+.statValue {
+  font-size: clamp(1.85rem, 5vw, 2.6rem);
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-bottom: 0.6rem;
+  text-shadow: var(--result-value-shadow);
+}
+
+.statLocation {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.statDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 1rem 0 0.85rem;
+}
+
+.statChartBtn {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.statChartBtn:hover:not(:disabled) {
+  background: rgba(77, 184, 255, 0.08);
+  border-color: rgba(77, 184, 255, 0.3);
+  color: var(--accent);
+}
+
+:global(html[data-theme="light"]) .statChartBtn:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.07);
+  border-color: rgba(37, 99, 235, 0.28);
+  color: var(--accent);
+}
+
+.statChartBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.statChartBtnActive {
+  background: rgba(77, 184, 255, 0.1);
+  border-color: rgba(77, 184, 255, 0.25);
+  color: var(--accent);
+}
+
+:global(html[data-theme="light"]) .statChartBtnActive {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+.statSource {
+  font-size: 0.6rem;
+  color: var(--muted);
+  margin-top: 1rem;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+}
+
+.inlineChart {
+  margin-top: 1rem;
+  animation: chartSlideIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes chartSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .spinner {
   width: 14px;
   height: 14px;
