@@ -6,6 +6,7 @@ import { parseQuery, formatValue } from "../../lib/censusTranslator";
 import { fetchCensusValue } from "../../lib/censusApi";
 import { computeRateIfNeeded } from "../../lib/censusRates";
 import { CURRENT_ACS_YEAR } from "../../lib/censusConstants";
+import { validateValue } from "../../lib/validateCensusData";
 
 export default async function handler(req, res) {
   // Only allow POST
@@ -36,7 +37,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    const rawValue = await fetchCensusValue(variable.id, geoParams, apiKey);
+    let rawValue = await fetchCensusValue(variable.id, geoParams, apiKey);
+
+    const firstValidation = validateValue(variable.id, rawValue);
+    if (!firstValidation.ok) {
+      try {
+        const retryValue = await fetchCensusValue(variable.id, geoParams, apiKey);
+        const retryValidation = validateValue(variable.id, retryValue);
+        if (!retryValidation.ok) {
+          return res.status(200).json({
+            query,
+            location: locationLabel,
+            metric: variable.label,
+            value: null,
+            warning: retryValidation.reason,
+            summary: `Data for ${variable.label.toLowerCase()} in ${locationLabel} could not be validated.`,
+            source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
+          });
+        }
+        rawValue = retryValue;
+      } catch (retryErr) {
+        return res.status(500).json({ error: retryErr.message || "Failed to fetch Census data after retry." });
+      }
+    }
 
     const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, apiKey);
     const formattedValue = rateResult

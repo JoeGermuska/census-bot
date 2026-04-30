@@ -2,6 +2,7 @@
 import { fetchCensusVariable } from "../../lib/censusApi";
 import { parseQuery, VARIABLE_MAP } from "../../lib/censusTranslator";
 import { hasRateConfig, getRateDenominator, getRateScale } from "../../lib/censusRates";
+import { validateValue, detectAnomalies } from "../../lib/validateCensusData";
 
 const MIN_YEAR = 2009;
 
@@ -107,7 +108,20 @@ export default async function handler(req, res) {
         numericValue = (metricValue / denominator) * getScale(variable.id);
       }
 
-      points.push({ year, numericValue: Number(numericValue.toFixed(2)) });
+      const finalValue = Number(numericValue.toFixed(2));
+      const validation = validateValue(variable.id, finalValue);
+      if (!validation.ok) {
+        points.push({ year, numericValue: null, warning: validation.reason });
+        continue;
+      }
+
+      const prevNumericValue = points.length > 0 ? points[points.length - 1].numericValue : null;
+      const anomaly = detectAnomalies(finalValue, prevNumericValue);
+      points.push({
+        year,
+        numericValue: finalValue,
+        ...(anomaly.anomaly ? { warning: anomaly.message } : {}),
+      });
     }
 
     return res.status(200).json(points);

@@ -7,6 +7,7 @@ import { parseQuery, formatValue } from "../../lib/censusTranslator";
 import { fetchCensusValue } from "../../lib/censusApi";
 import { QUERY_TYPES, CURRENT_ACS_YEAR } from "../../lib/censusConstants";
 import { computeRateIfNeeded } from "../../lib/censusRates";
+import { validateValue } from "../../lib/validateCensusData";
 import fs from "fs";
 import path from "path";
 
@@ -395,6 +396,158 @@ function chartErrorPayload() {
   };
 }
 
+// ── Statistic mode fast path (no agentic loop) ──────────────────────────────
+
+const PERCENT_VARIABLES = new Set([
+  "B17001_002E", "B23025_005E", "B08136_001E", "B15003_022E", "B23025_004E",
+]);
+
+function needsVerification(numericValue, variableId, validationFailed) {
+  return numericValue > 1_000_000 || validationFailed || PERCENT_VARIABLES.has(variableId);
+}
+
+function buildDeterministicSentence(place, variable, numericValue, format, year) {
+  const formatted = formatValue(numericValue, format);
+  return `${place} had a ${variable.toLowerCase()} of ${formatted} in ${year}.`;
+}
+
+async function verifySentence(numericValue, sentence) {
+  try {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 10,
+      system: `Reply "yes" or "no" only.`,
+      messages: [{
+        role: "user",
+        content: `Value: ${numericValue}\nSentence: "${sentence}"\nDoes the sentence accurately reflect the value?`,
+      }],
+    });
+    const text = response.content.find(b => b.type === "text")?.text?.trim().toLowerCase() || "yes";
+    return text.startsWith("yes");
+  } catch {
+    return true; // assume ok on failure — don't block response
+  }
+}
+
+async function handleStatisticModeFastPath(req, res, userMsg, mode) {
+  const censusApiKey = process.env.CENSUS_API_KEY;
+  if (!censusApiKey) {
+    return res.status(500).json({ error: "Server configuration error: missing Census API key." });
+  }
+
+  // Trend-within-statistic: route directly to trend endpoint — no LLM needed
+  if (needsTrendRouting(userMsg)) {
+    const parsed = parseQuery(userMsg);
+    const metricLabel = inferTrendMetricLabel(userMsg);
+
+    if (!parsed.error && parsed.locationLabel) {
+      // locationLabel is like "Austin, Texas" — split into city and state
+      const parts = parsed.locationLabel.split(",").map(s => s.trim());
+      const city = parts[0];
+      const state = parts[1];
+
+      if (city && state) {
+        const trendResult = await runTrendTool(req, {
+          city,
+          state,
+          metric: metricLabel,
+          startYear: 2018,
+          endYear: Number(CURRENT_ACS_YEAR),
+        });
+
+        if (Array.isArray(trendResult)) {
+          const series = [{
+            label: parsed.locationLabel,
+            points: trendResult
+              .filter(p => p.numericValue != null)
+              .map(p => ({ year: Number(p.year), numericValue: Number(p.numericValue) })),
+          }];
+          const payload = buildTrendChartPayload(series, metricLabel);
+          const warnings = trendResult.filter(p => p.warning).map(p => `${p.year}: ${p.warning}`);
+          return res.status(200).json({
+            reply: JSON.stringify(payload),
+            ...(warnings.length > 0 ? { warnings } : {}),
+          });
+        }
+      }
+    }
+    // Fall through to agentic loop if geo extraction fails
+    return null;
+  }
+
+  // Single lookup: fully deterministic pipeline
+  const parsed = parseQuery(userMsg);
+  if (parsed.error) return null; // fall through to agentic loop for fuzzy queries
+
+  const { variable, geoParams, locationLabel } = parsed;
+
+  let rawValue;
+  try {
+    rawValue = await fetchCensusValue(variable.id, geoParams, censusApiKey);
+  } catch (err) {
+    return res.status(200).json({ reply: null, error: String(err?.message || "Failed to fetch Census data."), warning: true });
+  }
+
+  let validationFailed = false;
+  const firstValidation = validateValue(variable.id, rawValue);
+  if (!firstValidation.ok) {
+    validationFailed = true;
+    try {
+      const retryValue = await fetchCensusValue(variable.id, geoParams, censusApiKey);
+      const retryValidation = validateValue(variable.id, retryValue);
+      if (!retryValidation.ok) {
+        return res.status(200).json({
+          reply: null,
+          error: `Unable to retrieve validated data: ${retryValidation.reason}`,
+          warning: true,
+        });
+      }
+      rawValue = retryValue;
+      validationFailed = false;
+    } catch (retryErr) {
+      return res.status(200).json({ reply: null, error: String(retryErr?.message || "Retry failed."), warning: true });
+    }
+  }
+
+  let numericValue = rawValue;
+  let format = variable.format;
+  try {
+    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey);
+    if (rateResult) {
+      numericValue = rateResult.value;
+      format = rateResult.format;
+    }
+  } catch {
+    // Rate computation failure is non-fatal — use raw value
+  }
+
+  const warnings = [];
+  if (validationFailed) warnings.push("Data required a retry — treat with caution.");
+
+  let sentence = buildDeterministicSentence(locationLabel, variable.label, numericValue, format, CURRENT_ACS_YEAR);
+
+  if (needsVerification(numericValue, variable.id, validationFailed)) {
+    const verified = await verifySentence(numericValue, sentence);
+    if (!verified) {
+      // Regenerate deterministically — never use LLM to fix it
+      sentence = buildDeterministicSentence(locationLabel, variable.label, numericValue, format, CURRENT_ACS_YEAR);
+    }
+  }
+
+  return res.status(200).json({
+    reply: sentence,
+    structured: {
+      value: numericValue,
+      variable: variable.label,
+      place: locationLabel,
+      year: Number(CURRENT_ACS_YEAR),
+      unit: format,
+    },
+    warnings,
+    validated: !validationFailed,
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -411,11 +564,20 @@ export default async function handler(req, res) {
   }
 
   try {
+    const initialUserMsg = getLatestUserMessage(messages);
+
+    // Statistic mode: deterministic fast path — bypasses the full agentic loop
+    // when parseQuery can resolve the query. Falls through to the loop on null.
+    if (mode === "statistic") {
+      const fastPathResult = await handleStatisticModeFastPath(req, res, initialUserMsg, mode);
+      if (fastPathResult !== null) return fastPathResult;
+      // null means we couldn't parse the query — fall through to agentic loop
+    }
+
     let currentMessages = messages;
     let finalReply = null;
     const trendSeries = []; // collected across tool calls for multi-line comparisons
     const loopDeadline = Date.now() + LOOP_TIMEOUT_MS;
-    const initialUserMsg = getLatestUserMessage(messages);
     const visualizationRequest = needsTrendRouting(initialUserMsg) || mode === "visualize";
 
     for (let i = 0; i < 5; i++) {
