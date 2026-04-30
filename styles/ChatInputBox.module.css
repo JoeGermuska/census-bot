@@ -1,0 +1,198 @@
+/* styles/ChatInputBox.module.css */
+
+/* ── Container card ───────────────────────────────────────────────────────── */
+.inputBox {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: visible;
+}
+
+/* Dark mode: glassmorphism layer on top of the surface color */
+:global(html:not([data-theme="light"])) .inputBox {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+/* Focused state — uses the chat accent colour (DA7756 orangish) */
+.inputBoxFocused {
+  border-color: rgba(218, 119, 86, 0.5);
+  box-shadow:
+    0 0 0 3px rgba(218, 119, 86, 0.12),
+    0 4px 24px rgba(0, 0, 0, 0.14);
+}
+
+:global(html:not([data-theme="light"])) .inputBoxFocused {
+  border-color: rgba(218, 119, 86, 0.4);
+  box-shadow:
+    0 0 0 3px rgba(218, 119, 86, 0.1),
+    0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Textarea area ────────────────────────────────────────────────────────── */
+.textareaWrap {
+  padding: 0.9rem 1rem 0.4rem;
+}
+
+.textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-family: inherit;
+  line-height: 1.55;
+  min-height: 44px;
+  max-height: 160px;
+  overflow-y: auto;
+  display: block;
+}
+
+.textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.65;
+}
+
+:global(html[data-theme="light"]) .textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
+.textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Prevent iOS Safari zoom-on-focus */
+@media (max-width: 720px) {
+  .textarea { font-size: 1rem; }
+}
+
+/* ── Toolbar row ──────────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem 0.6rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+:global(html:not([data-theme="light"])) .toolbar {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+/* "Thinking …" label shown while loading */
+.thinkingLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Animated typing dots ─────────────────────────────────────────────────── */
+.typingDots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+.typingDot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+/* ── Send button ──────────────────────────────────────────────────────────── */
+.sendBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9px;
+  border: none;
+  font-size: 0.84rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Active — white pill in dark mode, orange in light */
+.sendBtnActive {
+  background: #ffffff;
+  color: #0a0a0b;
+  box-shadow: 0 2px 14px rgba(255, 255, 255, 0.15);
+}
+
+:global(html[data-theme="light"]) .sendBtnActive {
+  background: #da7756;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(218, 119, 86, 0.3);
+}
+
+/* Muted / disabled */
+.sendBtnMuted {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+:global(html[data-theme="light"]) .sendBtnMuted {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* Spinning loader icon */
+.spinnerIcon {
+  animation: spin 1.4s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Mouse-following glow orb (dark mode only, while focused) ─────────────── */
+.focusGlow {
+  position: fixed;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(218, 119, 86, 0.07) 0%,
+    rgba(168, 85, 247, 0.05) 45%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(48px);
+}
+
+/* Hide in light mode — it would look out of place */
+:global(html[data-theme="light"]) .focusGlow {
+  display: none;
+}

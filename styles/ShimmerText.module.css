@@ -1,0 +1,35 @@
+/* ShimmerText gradient — split into background-image + supporting properties
+   so that switching themes never resets background-position-x (which Framer
+   Motion owns via inline style). Using the background shorthand would reset
+   all sub-properties including position on every rule change. */
+
+.root {
+  display: inline-block;
+  /* 300%-wide gradient: [gradient | shimmer band | gradient]
+     backgroundPositionX sweeps the visible window left→right through the band. */
+  background-image: linear-gradient(
+    90deg,
+    #22d3ee  0%,  #a855f7 18%,  #34d399 33%,
+    #34d399 37%,  rgba(255, 255, 255, 0) 41%,
+    rgba(255, 255, 255, 0.88) 50%,
+    rgba(255, 255, 255, 0) 59%,  #22d3ee 63%,
+    #22d3ee 67%,  #a855f7 84%,  #34d399 100%
+  );
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Light-mode: only swap the image; size/clip/fill stay unchanged */
+:global(html[data-theme="light"]) .root {
+  background-image: linear-gradient(
+    90deg,
+    #0891b2  0%,  #7c3aed 18%,  #059669 33%,
+    #059669 37%,  rgba(255, 255, 255, 0) 41%,
+    rgba(255, 255, 255, 0.70) 50%,
+    rgba(255, 255, 255, 0) 59%,  #0891b2 63%,
+    #0891b2 67%,  #7c3aed 84%,  #059669 100%
+  );
+}

@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import Head from "next/head";
 import SiteLayout from "../components/SiteLayout";
 import TrendChart from "../components/TrendChart";
+import ChatInputBox from "../components/ChatInputBox";
 import styles from "../styles/Chat.module.css";
 
 const MAX_EXCHANGES = 10;
@@ -256,13 +257,6 @@ export default function ChatPage() {
   }, [messages, loading]);
 
   useEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
-  }, [input]);
-
-  useEffect(() => {
     let latestChartIndex = -1;
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       const msg = messages[i];
@@ -469,12 +463,17 @@ export default function ChatPage() {
                             setExpandedChartIndex(null);
                           }}
                         >
-                          Minimize
+                          Hide Chart
                         </button>
                       </div>
                     </div>
                   );
                 })()}
+
+              {/* Screen-reader live region for loading state */}
+              <div role="status" aria-live="polite" aria-atomic="true" className={styles.srOnly}>
+                {loading ? "Fetching data, please wait…" : ""}
+              </div>
 
               {/* Input area */}
               <div className={styles.inputArea}>
@@ -483,31 +482,15 @@ export default function ChatPage() {
                     Conversation limit reached. Click <strong>Start over</strong> to begin a new chat.
                   </div>
                 ) : (
-                  <>
-                    <div className={styles.inputRow}>
-                      <textarea
-                        ref={textareaRef}
-                        className={styles.textarea}
-                        placeholder={activeMode.placeholder}
-                        value={input}
-                        rows={1}
-                        onChange={e => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        disabled={loading}
-                        aria-label="Chat input"
-                      />
-                      <button
-                        type="button"
-                        className={styles.sendBtn}
-                        onClick={() => sendMessage()}
-                        disabled={!input.trim() || loading}
-                        aria-label="Send message"
-                      >
-                        <SendIcon />
-                      </button>
-                    </div>
-                    <p className={styles.inputHint}>Press Enter to send · Shift+Enter for new line</p>
-                  </>
+                  <ChatInputBox
+                    ref={textareaRef}
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onSend={() => sendMessage()}
+                    loading={loading}
+                    disabled={atLimit}
+                    placeholder={activeMode.placeholder}
+                  />
                 )}
               </div>
             </>

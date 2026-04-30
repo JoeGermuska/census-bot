@@ -103,7 +103,11 @@ export default function ExploreMetrics() {
                     type="button"
                     className={`${ex.choice} ${on ? ex.choiceSelected : ""}`}
                     onClick={() => toggle(metric)}
+                    aria-pressed={on}
                   >
+                    <span className={ex.choiceCheck} aria-hidden="true">
+                      {on ? "✓" : "+"}
+                    </span>
                     {metric}
                   </button>
                 );

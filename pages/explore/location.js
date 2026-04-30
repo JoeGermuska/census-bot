@@ -1,5 +1,5 @@
 // pages/explore/location.js — Step 2: choose state + city
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
@@ -12,6 +12,115 @@ import {
   STATE_NAMES,
 } from "../../lib/censusConstants";
 
+// ── Searchable city combobox ─────────────────────────────────────────────────
+function CityCombobox({ cities, value, onChange, disabled }) {
+  const [query, setQuery]   = useState(value);
+  const [open, setOpen]     = useState(false);
+  const [cursor, setCursor] = useState(-1);
+  const listRef  = useRef(null);
+  const inputRef = useRef(null);
+
+  // Sync query with external value changes (e.g. state reset)
+  useEffect(() => { setQuery(value); }, [value]);
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return cities;
+    const q = query.toLowerCase();
+    return cities.filter(c => c.toLowerCase().includes(q));
+  }, [query, cities]);
+
+  function select(city) {
+    setQuery(city);
+    onChange(city);
+    setOpen(false);
+    setCursor(-1);
+  }
+
+  function handleInput(e) {
+    setQuery(e.target.value);
+    onChange(""); // clear confirmed value while typing
+    setOpen(true);
+    setCursor(-1);
+  }
+
+  function handleKeyDown(e) {
+    if (!open && (e.key === "ArrowDown" || e.key === "Enter")) {
+      setOpen(true);
+      return;
+    }
+    if (e.key === "Escape") { setOpen(false); setCursor(-1); return; }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setCursor(c => Math.min(c + 1, filtered.length - 1));
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setCursor(c => Math.max(c - 1, 0));
+    }
+    if (e.key === "Enter" && cursor >= 0 && filtered[cursor]) {
+      e.preventDefault();
+      select(filtered[cursor]);
+    }
+  }
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (cursor < 0 || !listRef.current) return;
+    const item = listRef.current.children[cursor];
+    if (item) item.scrollIntoView({ block: "nearest" });
+  }, [cursor]);
+
+  return (
+    <div className={ex.comboboxWrap}>
+      <input
+        ref={inputRef}
+        id="explore-city"
+        type="text"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls="city-listbox"
+        aria-haspopup="listbox"
+        autoComplete="off"
+        className={ex.comboboxInput}
+        value={query}
+        placeholder={disabled ? "Choose a state first" : "Type to search cities…"}
+        disabled={disabled}
+        onChange={handleInput}
+        onFocus={() => { if (!disabled) setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={handleKeyDown}
+      />
+      {open && filtered.length > 0 && !disabled && (
+        <ul
+          id="city-listbox"
+          role="listbox"
+          aria-label="Cities"
+          ref={listRef}
+          className={ex.comboboxList}
+        >
+          {filtered.map((city, i) => (
+            <li
+              key={city}
+              role="option"
+              aria-selected={city === value}
+              className={`${ex.comboboxItem}${i === cursor ? ` ${ex.comboboxItemActive}` : ""}${city === value ? ` ${ex.comboboxItemSelected}` : ""}`}
+              onMouseDown={() => select(city)}
+            >
+              {city === value && <span className={ex.comboboxCheck} aria-hidden>✓</span>}
+              {city}
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && filtered.length === 0 && !disabled && (
+        <div className={ex.comboboxEmpty}>No cities match "{query}"</div>
+      )}
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 export default function ExploreLocation() {
   const router = useRouter();
   const targetProgress = 67;
@@ -20,11 +129,11 @@ export default function ExploreLocation() {
     const val = Number(Array.isArray(raw) ? raw[0] : raw);
     return Number.isFinite(val) ? val : 33;
   }, [router.query.from]);
-  const [ready, setReady] = useState(false);
-  const [stateName, setStateName] = useState("");
-  const [city, setCity] = useState("");
+  const [ready, setReady]           = useState(false);
+  const [stateName, setStateName]   = useState("");
+  const [city, setCity]             = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState(null);
+  const [formError, setFormError]   = useState(null);
   const [progressWidth, setProgressWidth] = useState(fromProgress);
 
   useEffect(() => {
@@ -38,7 +147,7 @@ export default function ExploreLocation() {
       }
 
       const qState = Array.isArray(router.query.state) ? router.query.state[0] : router.query.state;
-      const qCity = Array.isArray(router.query.city) ? router.query.city[0] : router.query.city;
+      const qCity  = Array.isArray(router.query.city)  ? router.query.city[0]  : router.query.city;
       if (qState && STATES_CITIES[qState]) {
         setStateName(qState);
         if (qCity && STATES_CITIES[qState]?.includes(qCity)) setCity(qCity);
@@ -132,21 +241,15 @@ export default function ExploreLocation() {
 
             <div className={ex.fieldGroup}>
               <label className={ex.fieldLabel} htmlFor="explore-city">City</label>
-              <select
-                id="explore-city"
-                className={ex.select}
+              <CityCombobox
+                cities={cities}
                 value={city}
                 disabled={!stateName}
-                onChange={e => {
-                  setCity(e.target.value);
+                onChange={val => {
+                  setCity(val);
                   setFormError(null);
                 }}
-              >
-                <option value="">{stateName ? "Select city…" : "Choose a state first"}</option>
-                {cities.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              />
             </div>
 
             {formError && (

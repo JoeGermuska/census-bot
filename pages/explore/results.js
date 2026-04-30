@@ -13,6 +13,31 @@ import {
   CURRENT_ACS_YEAR,
 } from "../../lib/censusConstants";
 
+// Plain-English bottom-line summary for a trend result
+function buildTrendSummary(points, metric) {
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const valid = points.filter(p => p.numericValue != null && Number.isFinite(p.numericValue));
+  if (valid.length < 2) return null;
+  const first = valid[0];
+  const last  = valid[valid.length - 1];
+  const change = last.numericValue - first.numericValue;
+  if (Math.abs(change) < 0.0001 * Math.abs(first.numericValue)) {
+    return `${metric} was stable from ${first.year} to ${last.year}.`;
+  }
+  const dir  = change > 0 ? "increased" : "decreased";
+  const pct  = Math.abs(((change / first.numericValue) * 100)).toFixed(1);
+  const sign = change > 0 ? "+" : "";
+  const fmt  = v => {
+    if (!Number.isFinite(v)) return "N/A";
+    if (/income|rent|value/i.test(metric))
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v);
+    if (/rate|percent|poverty|unemployment|employment|bachelor|education/i.test(metric)) return `${v.toFixed(2)}%`;
+    if (/age/i.test(metric)) return `${v.toFixed(1)} yrs`;
+    return new Intl.NumberFormat("en-US").format(Math.round(v));
+  };
+  return `${metric} ${dir} from ${fmt(first.numericValue)} (${first.year}) to ${fmt(last.numericValue)} (${last.year}) — ${sign}${pct}%.`;
+}
+
 // Per-metric accent colors and icons
 function getMetricMeta(metricLabel) {
   const l = (metricLabel || "").toLowerCase();
@@ -259,16 +284,25 @@ export default function ExploreResults() {
             </div>
           </div>
 
+          {/* Screen-reader live region */}
+          <div role="status" aria-live="polite" aria-atomic="true" className={ex.srOnly}>
+            {loading
+              ? `Fetching results for ${city}, ${stateName}…`
+              : results.length > 0
+              ? `${results.length} result${results.length > 1 ? "s" : ""} ready.`
+              : ""}
+          </div>
+
           <section className={ex.resultsSection} aria-label="Query results">
             <h2 className={ex.resultsTitle}>Results</h2>
             {loading ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1.5rem" }}>
                 {Array.from({ length: metrics.length || 3 }).map((_, i) => (
                   <div
                     key={i}
                     style={{
-                      height: 130,
-                      borderRadius: 16,
+                      height: 180,
+                      borderRadius: 20,
                       background: "var(--surface)",
                       border: "1px solid var(--border)",
                       opacity: 0.5 + (i * 0.15),
@@ -301,7 +335,7 @@ export default function ExploreResults() {
                   }
 
                   const { result } = row;
-                  const { color, icon } = getMetricMeta(result.metric);
+                  const { color } = getMetricMeta(result.metric);
                   const trend = trendByQuery[row.query];
                   const trendBusy = trendLoadingKey === row.query;
                   const chartVisible = showTrendMap[row.query] && trend && !trend.error;
@@ -316,9 +350,8 @@ export default function ExploreResults() {
                         animationDelay: `${index * 70}ms`,
                       }}
                     >
-                      {/* Metric label + icon */}
+                      {/* Metric label */}
                       <div className={ex.statMeta}>
-                        <span className={ex.statIcon}>{icon}</span>
                         <span className={ex.statLabel}>{result.metric}</span>
                       </div>
 
@@ -326,7 +359,7 @@ export default function ExploreResults() {
                       <div className={ex.statValue}>{result.value}</div>
 
                       {/* Location */}
-                      <div className={ex.statLocation}>📍 {result.location}</div>
+                      <div className={ex.statLocation}>{result.location}</div>
 
                       {/* Divider + chart toggle */}
                       <div className={ex.statDivider} />
@@ -335,6 +368,7 @@ export default function ExploreResults() {
                         className={`${ex.statChartBtn}${chartVisible ? ` ${ex.statChartBtnActive}` : ""}`}
                         disabled={trendBusy}
                         onClick={() => toggleTrend(row.query, result.metric)}
+                        aria-expanded={chartVisible}
                       >
                         {trendBusy
                           ? <><CardSpinner /> Loading chart…</>
@@ -343,10 +377,16 @@ export default function ExploreResults() {
                             : "📈 Show Trend"}
                       </button>
 
-                      {/* Inline chart */}
+                      {/* Inline chart + bottom-line summary */}
                       {chartVisible && (
                         <div className={ex.inlineChart}>
                           <TrendChart data={trend} inline />
+                          {(() => {
+                            const summary = buildTrendSummary(trend.points, result.metric);
+                            return summary ? (
+                              <p className={ex.trendSummary}>{summary}</p>
+                            ) : null;
+                          })()}
                         </div>
                       )}
 
