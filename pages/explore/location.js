@@ -8,12 +8,11 @@ import ex from "../../styles/Explore.module.css";
 import homeStyles from "../../styles/Home.module.css";
 import {
   EXPLORE_METRICS_STORAGE_KEY,
-  STATES_CITIES,
   STATE_NAMES,
 } from "../../lib/censusConstants";
 
 // ── Searchable city combobox ─────────────────────────────────────────────────
-function CityCombobox({ cities, value, onChange, disabled }) {
+function CityCombobox({ cities, value, onChange, disabled, loading }) {
   const [query, setQuery]   = useState(value);
   const [open, setOpen]     = useState(false);
   const [cursor, setCursor] = useState(-1);
@@ -84,8 +83,14 @@ function CityCombobox({ cities, value, onChange, disabled }) {
         autoComplete="off"
         className={ex.comboboxInput}
         value={query}
-        placeholder={disabled ? "Choose a state first" : "Type to search cities…"}
-        disabled={disabled}
+        placeholder={
+          disabled
+            ? "Choose a state first"
+            : loading
+            ? "Loading places…"
+            : "Type to search any place in this state…"
+        }
+        disabled={disabled || loading}
         onChange={handleInput}
         onFocus={() => { if (!disabled) setOpen(true); }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
@@ -135,6 +140,10 @@ export default function ExploreLocation() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError]   = useState(null);
   const [progressWidth, setProgressWidth] = useState(fromProgress);
+  const [places, setPlaces]         = useState([]); // [{ name, type, raw }]
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [placesError, setPlacesError] = useState(null);
+  const placesCache = useRef(new Map()); // state name → places[]
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -148,9 +157,9 @@ export default function ExploreLocation() {
 
       const qState = Array.isArray(router.query.state) ? router.query.state[0] : router.query.state;
       const qCity  = Array.isArray(router.query.city)  ? router.query.city[0]  : router.query.city;
-      if (qState && STATES_CITIES[qState]) {
+      if (qState && STATE_NAMES.includes(qState)) {
         setStateName(qState);
-        if (qCity && STATES_CITIES[qState]?.includes(qCity)) setCity(qCity);
+        if (qCity) setCity(qCity); // validated against fetched places below
       }
     } catch {
       router.replace("/explore");
@@ -159,7 +168,48 @@ export default function ExploreLocation() {
     setReady(true);
   }, [router]);
 
-  const cities = stateName ? STATES_CITIES[stateName] : [];
+  const cityNames = useMemo(() => places.map(p => p.name), [places]);
+
+  // Fetch the full Census Places list for the chosen state.
+  useEffect(() => {
+    if (!stateName) {
+      setPlaces([]);
+      setPlacesError(null);
+      return;
+    }
+    const cached = placesCache.current.get(stateName);
+    if (cached) {
+      setPlaces(cached);
+      setPlacesError(null);
+      return;
+    }
+    let cancelled = false;
+    setPlacesLoading(true);
+    setPlacesError(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/places?state=${encodeURIComponent(stateName)}`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          setPlacesError(data?.error || "Couldn't load places for this state.");
+          setPlaces([]);
+          return;
+        }
+        const list = Array.isArray(data.places) ? data.places : [];
+        placesCache.current.set(stateName, list);
+        setPlaces(list);
+      } catch (err) {
+        if (!cancelled) {
+          setPlacesError("Network error loading places.");
+          setPlaces([]);
+        }
+      } finally {
+        if (!cancelled) setPlacesLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [stateName]);
 
   useEffect(() => {
     setProgressWidth(fromProgress);
@@ -242,14 +292,25 @@ export default function ExploreLocation() {
             <div className={ex.fieldGroup}>
               <label className={ex.fieldLabel} htmlFor="explore-city">City</label>
               <CityCombobox
-                cities={cities}
+                cities={cityNames}
                 value={city}
                 disabled={!stateName}
+                loading={placesLoading}
                 onChange={val => {
                   setCity(val);
                   setFormError(null);
                 }}
               />
+              {placesError && (
+                <p className={ex.hint} style={{ color: "var(--error)", marginTop: 6 }}>
+                  {placesError}
+                </p>
+              )}
+              {!placesError && stateName && !placesLoading && places.length > 0 && (
+                <p className={ex.hint} style={{ marginTop: 6, opacity: 0.7 }}>
+                  {places.length} places available — type any name to search.
+                </p>
+              )}
             </div>
 
             {formError && (

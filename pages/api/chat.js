@@ -11,7 +11,7 @@ import { validateValue } from "../../lib/validateCensusData";
 import fs from "fs";
 import path from "path";
 
-const MODEL = "claude-haiku-4-5";
+const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 1024;
 const LOOP_TIMEOUT_MS = 25_000; // 25s total budget for the agentic loop
 // Warn if system prompt exceeds this many chars (~30k tokens ≈ 120k chars)
