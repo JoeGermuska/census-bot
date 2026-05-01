@@ -648,3 +648,103 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ── Clarification card (chip picker for ambiguous queries) ─────────────── */
+.clarificationCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.clarificationPrompt {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--c-text);
+  line-height: 1.4;
+  margin: 0 0 0.15rem 0;
+}
+
+.clarificationOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.clarificationChip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+  font-family: inherit;
+  width: 100%;
+}
+
+.clarificationChip:hover:not(:disabled) {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.clarificationChip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.clarificationChipLabel {
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.clarificationChipSublabel {
+  font-size: 0.76rem;
+  color: var(--c-text-dim);
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.clarificationFreeText {
+  margin-top: 0.2rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  border: 1px dashed var(--c-border);
+  background: transparent;
+  color: var(--c-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: color 0.16s ease, border-color 0.16s ease;
+  font-family: inherit;
+}
+
+.clarificationFreeText:hover {
+  color: var(--c-text);
+  border-color: var(--c-accent);
+}
+
+.clarificationCollapsed {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--c-text-dim);
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  width: fit-content;
+}
+
+.clarificationCollapsedCheck {
+  color: var(--c-accent);
+  font-weight: 700;
+}

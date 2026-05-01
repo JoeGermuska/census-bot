@@ -3,11 +3,12 @@
 // ANTHROPIC_API_KEY is read from .env.local — never exposed to the browser.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { parseQuery, formatValue } from "../../lib/censusTranslator";
+import { parseQuery, formatValue, detectAmbiguousMetric, STATE_FIPS } from "../../lib/censusTranslator";
 import { fetchCensusValue } from "../../lib/censusApi";
 import { QUERY_TYPES, CURRENT_ACS_YEAR } from "../../lib/censusConstants";
 import { computeRateIfNeeded } from "../../lib/censusRates";
 import { validateValue } from "../../lib/validateCensusData";
+import { findGeoCandidates, findZctaByZip, extractGeoPhrase, describeCandidate, geoParamsFromCandidate, candidateLabel } from "../../lib/geoCandidates";
 import fs from "fs";
 import path from "path";
 
@@ -429,10 +430,236 @@ async function verifySentence(numericValue, sentence) {
   }
 }
 
-async function handleStatisticModeFastPath(req, res, userMsg, mode) {
+// Direct lookup when user has picked a geo and/or metric via clarification chips.
+// Bypasses parseQuery — uses FIPS codes from the candidate object directly.
+async function handlePickedLookup(res, { pickedGeo, pickedMetric, userMsg }) {
   const censusApiKey = process.env.CENSUS_API_KEY;
   if (!censusApiKey) {
     return res.status(500).json({ error: "Server configuration error: missing Census API key." });
+  }
+
+  // Resolve the metric: prefer pickedMetric, else parse from userMsg
+  let variable;
+  if (pickedMetric?.variableId && pickedMetric?.label && pickedMetric?.format) {
+    variable = {
+      id: pickedMetric.variableId,
+      label: pickedMetric.label,
+      format: pickedMetric.format,
+    };
+  } else {
+    const parsed = parseQuery(userMsg);
+    if (parsed.error || !parsed.variable) return null; // fall through to fast path
+    variable = parsed.variable;
+  }
+
+  // Resolve the geo: prefer pickedGeo, else fall through
+  let geoParams, locationLabel;
+  if (pickedGeo) {
+    geoParams = geoParamsFromCandidate(pickedGeo);
+    if (!geoParams) return null;
+    locationLabel = candidateLabel(pickedGeo);
+  } else {
+    const parsed = parseQuery(userMsg);
+    if (parsed.error || !parsed.geoParams) return null;
+    geoParams = parsed.geoParams;
+    locationLabel = parsed.locationLabel;
+  }
+
+  let rawValue;
+  try {
+    rawValue = await fetchCensusValue(variable.id, geoParams, censusApiKey);
+  } catch (err) {
+    return res.status(200).json({ reply: null, error: String(err?.message || "Failed to fetch Census data."), warning: true });
+  }
+
+  let numericValue = rawValue;
+  let format = variable.format;
+  try {
+    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey);
+    if (rateResult) {
+      numericValue = rateResult.value;
+      format = rateResult.format;
+    }
+  } catch {
+    // Rate computation failure is non-fatal — use raw value
+  }
+
+  const formatted = formatValue(numericValue, format);
+  const sentence = `${locationLabel} had a ${variable.label.toLowerCase()} of ${formatted} in ${CURRENT_ACS_YEAR}.`;
+
+  return res.status(200).json({
+    reply: sentence,
+    structured: {
+      value: numericValue,
+      variable: variable.label,
+      place: locationLabel,
+      year: Number(CURRENT_ACS_YEAR),
+      unit: format,
+      geoType: pickedGeo?.geoType || "place",
+    },
+  });
+}
+
+// Build a clarification payload that the chat UI renders as a chip card.
+function buildClarificationPayload({ kind, prompt, options, allowFreeText = true, originalQuery }) {
+  return {
+    type: "clarification",
+    kind,
+    prompt,
+    options,
+    allowFreeText,
+    originalQuery,
+  };
+}
+
+// Skip the metric picker if the query already includes a clearly disambiguating phrase.
+function isMetricUnambiguous(query) {
+  return detectAmbiguousMetric(query) === null;
+}
+
+// Returns a clarification payload if the query is ambiguous, else null.
+async function maybeBuildClarification(userMsg, { skipMetricCheck = false } = {}) {
+  // 1. Metric ambiguity (cheap — no API calls). Skip if user already picked one.
+  const ambiguous = skipMetricCheck ? null : detectAmbiguousMetric(userMsg);
+  if (ambiguous) {
+    return buildClarificationPayload({
+      kind: "metric",
+      prompt: `"${ambiguous.bucket.charAt(0).toUpperCase()}${ambiguous.bucket.slice(1)}" can mean a few things in ACS. Which do you want?`,
+      options: ambiguous.options.map((opt) => ({
+        label: opt.label,
+        sublabel: `${opt.description} (Table ${opt.table})`,
+        value: `${opt.label.toLowerCase()} ${userMsg.replace(new RegExp(`\\b${ambiguous.bucket}\\b`, "i"), "").trim()}`.replace(/\s+/g, " "),
+        meta: {
+          pickedMetric: {
+            variableId: opt.id,
+            label: opt.label,
+            table: opt.table,
+            format: opt.format,
+          },
+        },
+      })),
+      originalQuery: userMsg,
+    });
+  }
+
+  // 2. ZIP code shortcut (5-digit number → ZCTA)
+  const zipMatch = String(userMsg || "").match(/\b(\d{5})\b/);
+  if (zipMatch && /\bzip|\bzcta\b/i.test(userMsg)) {
+    const z = await findZctaByZip(zipMatch[1]).catch(() => null);
+    if (z) {
+      return null; // ZIP unambiguous; let the agentic loop pick it up
+    }
+  }
+
+  // 3. Geographic ambiguity — only when the query has a "in <name>" phrase
+  const geo = extractGeoPhrase(userMsg);
+  if (!geo || !geo.name) return null;
+
+  // Skip when the typed name is itself a state (state-only query, unambiguous)
+  const lowerName = geo.name.toLowerCase();
+  if (geo.state == null && STATE_FIPS[lowerName]) return null;
+
+  if (geo.state == null) {
+    // No state given — find candidates across all states
+    let candidates;
+    try {
+      candidates = await findGeoCandidates(geo.name, { stateName: null });
+    } catch {
+      return null;
+    }
+    if (candidates.length <= 1) return null; // nothing to clarify
+    const top = candidates.slice(0, 8);
+    return buildClarificationPayload({
+      kind: "geography",
+      prompt: `"${geo.name}" matches ${candidates.length} ACS geographies. Which did you mean?`,
+      options: top.map((c) => {
+        const d = describeCandidate(c);
+        return {
+          label: `${d.icon} ${d.label}`,
+          sublabel: d.sublabel,
+          value: `[Picked ${candidateLabel(c)}] ${userMsg}`,
+          meta: { pickedGeo: c },
+        };
+      }),
+      originalQuery: userMsg,
+    });
+  }
+
+  // State given — check for multiple geo TYPES inside that state
+  let candidates;
+  try {
+    candidates = await findGeoCandidates(geo.name, { stateName: geo.state });
+  } catch {
+    return null;
+  }
+  if (candidates.length <= 1) return null;
+
+  // Group by geo type — if there are multiple types (e.g. place + cbsa), ask
+  const types = new Set(candidates.map((c) => c.geoType));
+  if (types.size === 1 && candidates.length === 1) return null;
+  if (types.size === 1 && candidates.length > 1) {
+    // Same type, multiple places (e.g. two Auroras in IL) — ask which
+    return buildClarificationPayload({
+      kind: "geography",
+      prompt: `Multiple "${geo.name}" places in ${geo.state}. Which did you mean?`,
+      options: candidates.slice(0, 8).map((c) => {
+        const d = describeCandidate(c);
+        return {
+          label: `${d.icon} ${d.label}`,
+          sublabel: d.sublabel,
+          value: `[Picked ${candidateLabel(c)}] ${userMsg}`,
+          meta: { pickedGeo: c },
+        };
+      }),
+      originalQuery: userMsg,
+    });
+  }
+  // Multiple types — show the scope picker (city vs county vs metro)
+  return buildClarificationPayload({
+    kind: "geography",
+    prompt: `"${geo.name}" could mean a few different ACS geographies. Which scope?`,
+    options: candidates.slice(0, 8).map((c) => {
+      const d = describeCandidate(c);
+      return {
+        label: `${d.icon} ${d.label}`,
+        sublabel: d.sublabel,
+        value: `[Picked ${candidateLabel(c)}] ${userMsg}`,
+        meta: { pickedGeo: c },
+      };
+    }),
+    originalQuery: userMsg,
+  });
+}
+
+// Substitute the location phrase in the original query with the user's chosen one.
+function rewriteQueryWithLocation(originalQuery, oldPhrase, newPhrase) {
+  const idx = originalQuery.toLowerCase().indexOf(oldPhrase.toLowerCase());
+  if (idx === -1) return `${originalQuery} (${newPhrase})`;
+  return originalQuery.slice(0, idx) + newPhrase + originalQuery.slice(idx + oldPhrase.length);
+}
+
+async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
+  const censusApiKey = process.env.CENSUS_API_KEY;
+  if (!censusApiKey) {
+    return res.status(500).json({ error: "Server configuration error: missing Census API key." });
+  }
+
+  const { skipMetricCheck = false, pickedMetric = null } = opts;
+
+  // Clarification step: if the query is ambiguous in metric or geography,
+  // ask the user instead of guessing. Skipped automatically when the user
+  // already picked (their next message will be unambiguous).
+  const clarification = await maybeBuildClarification(userMsg, { skipMetricCheck });
+  if (clarification) {
+    // If geo clarification fires AND user already picked the metric, propagate
+    // the metric onto every chip so the next click sends both at once.
+    if (clarification.kind === "geography" && pickedMetric) {
+      clarification.options = clarification.options.map((o) => ({
+        ...o,
+        meta: { ...(o.meta || {}), pickedMetric },
+      }));
+    }
+    return res.status(200).json({ reply: JSON.stringify(clarification) });
   }
 
   // Trend-within-statistic: route directly to trend endpoint — no LLM needed
@@ -553,7 +780,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { messages, mode } = req.body;
+  const { messages, mode, pickedGeo, pickedMetric } = req.body;
 
   if (!Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: "No messages provided." });
@@ -569,7 +796,20 @@ export default async function handler(req, res) {
     // Statistic mode: deterministic fast path — bypasses the full agentic loop
     // when parseQuery can resolve the query. Falls through to the loop on null.
     if (mode === "statistic") {
-      const fastPathResult = await handleStatisticModeFastPath(req, res, initialUserMsg, mode);
+      // If the user has picked BOTH metric and geo, go straight to lookup.
+      if (pickedGeo && pickedMetric) {
+        const directResult = await handlePickedLookup(res, { pickedGeo, pickedMetric, userMsg: initialUserMsg });
+        if (directResult !== null) return directResult;
+      }
+      // If only pickedGeo (geo is locked, metric still in message), direct lookup —
+      // metric will be parsed from text.
+      if (pickedGeo && !pickedMetric) {
+        const directResult = await handlePickedLookup(res, { pickedGeo, pickedMetric: null, userMsg: initialUserMsg });
+        if (directResult !== null) return directResult;
+      }
+      // If only pickedMetric, the metric is locked — but the geo may still be
+      // ambiguous, so run the clarification path (it will skip the metric check).
+      const fastPathResult = await handleStatisticModeFastPath(req, res, initialUserMsg, mode, { skipMetricCheck: !!pickedMetric, pickedMetric });
       if (fastPathResult !== null) return fastPathResult;
       // null means we couldn't parse the query — fall through to agentic loop
     }

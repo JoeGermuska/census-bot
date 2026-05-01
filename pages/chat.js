@@ -207,6 +207,49 @@ function TypingIndicator() {
   );
 }
 
+// ── Clarification card (chip picker for ambiguous queries) ──────────────────
+function ClarificationCard({ data, onPick, picked }) {
+  if (!data) return null;
+  // Collapsed state — user already picked; show the choice as a small breadcrumb.
+  if (picked) {
+    return (
+      <div className={styles.clarificationCollapsed}>
+        <span className={styles.clarificationCollapsedCheck}>✓</span>
+        <span>You picked: <strong>{picked}</strong></span>
+      </div>
+    );
+  }
+  return (
+    <div className={styles.clarificationCard}>
+      <p className={styles.clarificationPrompt}>{data.prompt}</p>
+      <div className={styles.clarificationOptions}>
+        {data.options.map((opt, i) => (
+          <button
+            key={i}
+            type="button"
+            className={styles.clarificationChip}
+            onClick={() => onPick(opt)}
+          >
+            <span className={styles.clarificationChipLabel}>{opt.label}</span>
+            {opt.sublabel && (
+              <span className={styles.clarificationChipSublabel}>{opt.sublabel}</span>
+            )}
+          </button>
+        ))}
+      </div>
+      {data.allowFreeText && (
+        <button
+          type="button"
+          className={styles.clarificationFreeText}
+          onClick={() => onPick({ label: "None of these", value: "__free_text__" })}
+        >
+          None of these — let me retype
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ── More Info (methodology + caveats) ────────────────────────────────────────
 function MoreInfo({ methodology, caveats }) {
   const [open, setOpen] = useState(false);
@@ -273,7 +316,8 @@ export default function ChatPage() {
     }
   }, [messages, minimizedCharts]);
 
-  async function sendMessage(overrideText) {
+  // pickedMeta: { pickedGeo?, pickedMetric?, displayLabel? } when user clicked a chip
+  async function sendMessage(overrideText, pickedMeta = null) {
     const text = (overrideText !== undefined ? overrideText : input).trim();
     if (!text || loading || atLimit) return;
 
@@ -286,13 +330,17 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
+      const body = {
+        messages: next.map(m => ({ role: m.role, content: m.content })),
+        mode: mode || "statistic",
+      };
+      if (pickedMeta?.pickedGeo) body.pickedGeo = pickedMeta.pickedGeo;
+      if (pickedMeta?.pickedMetric) body.pickedMetric = pickedMeta.pickedMetric;
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: next.map(m => ({ role: m.role, content: m.content })),
-          mode: mode || "statistic",
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -311,6 +359,24 @@ export default function ChatPage() {
       setLoading(false);
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
+  }
+
+  // Click handler for clarification chips: collapse the card on the picked
+  // message AND fire the next request with the chip's metadata.
+  function handleClarificationPick(messageIndex, option) {
+    if (option.value === "__free_text__") {
+      // User wants to retype — collapse the card without sending a new message
+      setMessages(prev => prev.map((m, i) =>
+        i === messageIndex ? { ...m, pickedLabel: "(typed manually)" } : m
+      ));
+      setTimeout(() => textareaRef.current?.focus(), 50);
+      return;
+    }
+    // Mark the card collapsed with the user's chosen label
+    setMessages(prev => prev.map((m, i) =>
+      i === messageIndex ? { ...m, pickedLabel: option.label } : m
+    ));
+    sendMessage(option.value, option.meta || null);
   }
 
   function handleKeyDown(e) {
@@ -410,6 +476,7 @@ export default function ChatPage() {
                     const parsed = msg.role === "assistant" ? safeParse(msg.content) : null;
                     const isTrendChart = parsed?.type === "trend_chart";
                     const isChartError = parsed?.type === "error";
+                    const isClarification = parsed?.type === "clarification";
 
                     return (
                       <div key={i} className={`${styles.messageRow} ${msg.role === "user" ? styles.messageRowUser : ""}`}>
@@ -426,13 +493,19 @@ export default function ChatPage() {
                               <TrendChart data={parsed} />
                             ) : isChartError ? (
                               parsed.message
+                            ) : isClarification ? (
+                              <ClarificationCard
+                                data={parsed}
+                                picked={msg.pickedLabel || null}
+                                onPick={(opt) => handleClarificationPick(i, opt)}
+                              />
                             ) : (
                               renderMarkdown(msg.content)
                             )
                           ) : (
                             msg.content
                           )}
-                          {msg.role === "assistant" && !isTrendChart && (msg.methodology || msg.caveats) && (
+                          {msg.role === "assistant" && !isTrendChart && !isClarification && (msg.methodology || msg.caveats) && (
                             <MoreInfo methodology={msg.methodology} caveats={msg.caveats} />
                           )}
                         </div>
