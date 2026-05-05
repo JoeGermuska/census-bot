@@ -41,18 +41,18 @@ function buildTrendSummary(points, metric) {
 // Per-metric accent colors and icons
 function getMetricMeta(metricLabel) {
   const l = (metricLabel || "").toLowerCase();
-  if (l.includes("income") || l.includes("per capita")) return { color: "#4db8ff", icon: "💰" };
-  if (l.includes("population")) return { color: "#66ffcc", icon: "👥" };
-  if (l.includes("home value") || l.includes("housing value")) return { color: "#a855f7", icon: "🏠" };
-  if (l.includes("rent")) return { color: "#c084fc", icon: "🏢" };
-  if (l.includes("housing unit")) return { color: "#818cf8", icon: "🏘️" };
-  if (l.includes("poverty")) return { color: "#f97316", icon: "📊" };
-  if (l.includes("unemployment")) return { color: "#fb923c", icon: "📉" };
-  if (l.includes("employment")) return { color: "#34d399", icon: "📈" };
-  if (l.includes("age")) return { color: "#fbbf24", icon: "📅" };
-  if (l.includes("commute") || l.includes("travel")) return { color: "#ec4899", icon: "🚇" };
-  if (l.includes("bachelor") || l.includes("education")) return { color: "#8b5cf6", icon: "🎓" };
-  return { color: "#4db8ff", icon: "📌" };
+  if (l.includes("income") || l.includes("per capita")) return { color: "#4db8ff", icon: "" };
+  if (l.includes("population")) return { color: "#66ffcc", icon: "" };
+  if (l.includes("home value") || l.includes("housing value")) return { color: "#a855f7", icon: "" };
+  if (l.includes("rent")) return { color: "#c084fc", icon: "" };
+  if (l.includes("housing unit")) return { color: "#818cf8", icon: "" };
+  if (l.includes("poverty")) return { color: "#f97316", icon: "" };
+  if (l.includes("unemployment")) return { color: "#fb923c", icon: "" };
+  if (l.includes("employment")) return { color: "#34d399", icon: "" };
+  if (l.includes("age")) return { color: "#fbbf24", icon: "" };
+  if (l.includes("commute") || l.includes("travel")) return { color: "#ec4899", icon: "" };
+  if (l.includes("bachelor") || l.includes("education")) return { color: "#8b5cf6", icon: "" };
+  return { color: "#4db8ff", icon: "" };
 }
 
 function CardSpinner() {
@@ -374,7 +374,7 @@ export default function ExploreResults() {
                           ? <><CardSpinner /> Loading chart…</>
                           : chartVisible
                             ? "↑ Hide Chart"
-                            : "📈 Show Trend"}
+                            : "↓ Show Trend"}
                       </button>
 
                       {/* Inline chart + bottom-line summary */}

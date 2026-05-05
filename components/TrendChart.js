@@ -278,7 +278,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
               fontSize: 9, fontWeight: 800, letterSpacing: "0.14em",
               color: "var(--accent)", marginBottom: 8,
             }}>
-              📈 TREND
+              TREND
             </div>
             <div style={{
               fontSize: 14, fontWeight: 700, color: "var(--text)",
@@ -291,7 +291,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
             color: "var(--chart-muted)", fontSize: 11,
             textAlign: "right", paddingTop: 2, flexShrink: 0,
           }}>
-            📍 {location}
+            {location}
           </div>
         </div>
       )}
@@ -357,6 +357,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
 
               <XAxis
                 dataKey="year"
+                ticks={rows.map(r => r.year)}
                 tick={{ fill: "var(--chart-tick)", fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}

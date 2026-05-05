@@ -575,7 +575,7 @@ async function maybeBuildClarification(userMsg, { skipMetricCheck = false } = {}
       options: top.map((c) => {
         const d = describeCandidate(c);
         return {
-          label: `${d.icon} ${d.label}`,
+          label: d.label,
           sublabel: d.sublabel,
           value: `[Picked ${candidateLabel(c)}] ${userMsg}`,
           meta: { pickedGeo: c },
@@ -605,7 +605,7 @@ async function maybeBuildClarification(userMsg, { skipMetricCheck = false } = {}
       options: candidates.slice(0, 8).map((c) => {
         const d = describeCandidate(c);
         return {
-          label: `${d.icon} ${d.label}`,
+          label: d.label,
           sublabel: d.sublabel,
           value: `[Picked ${candidateLabel(c)}] ${userMsg}`,
           meta: { pickedGeo: c },
