@@ -95,6 +95,7 @@
 
 .navLink:hover:not(.navLinkActive) {
   color: var(--accent);
+  border-color: var(--accent-2);
 }
 
 .navLink.navLinkActive {

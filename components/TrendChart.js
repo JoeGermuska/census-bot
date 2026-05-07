@@ -347,7 +347,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
           No trend data available.
         </div>
       ) : (
-        <div ref={chartContainerRef}>
+        <div ref={chartContainerRef} style={{ height: chartHeight, overflow: "hidden" }}>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <AreaChart data={rows} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
               <defs>
@@ -392,7 +392,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
                 }}
               />
 
-              <Tooltip content={<CustomTooltip metric={metric} />} />
+              <Tooltip content={<CustomTooltip metric={metric} />} isAnimationActive={false} />
               {isMulti && (
                 <Legend
                   wrapperStyle={{ fontSize: 11, paddingTop: 12, color: "var(--chart-muted)" }}
