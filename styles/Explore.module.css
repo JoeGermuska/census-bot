@@ -121,6 +121,18 @@
   color: var(--accent);
 }
 
+.choiceIcon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.choiceSelected .choiceIcon {
+  opacity: 1;
+}
+
 @media (max-width: 720px) {
   .choiceList {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -294,8 +306,21 @@
 }
 
 .btnPrimary:disabled {
-  opacity: 0.45;
+  opacity: 0.38;
   cursor: not-allowed;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* Active (enabled) primary button — vivid accent */
+.btnPrimaryActive,
+.btnPrimaryActive:hover {
+  background: var(--accent-2) !important;
+}
+
+:global(html[data-theme="dark"]) .btnPrimaryActive,
+:global(html[data-theme="dark"]) .btnPrimaryActive:hover {
+  background: var(--accent) !important;
 }
 
 .fieldGroup {
@@ -442,6 +467,87 @@
   font-style: italic;
 }
 
+/* Row wrapper: input + loading badge side by side */
+.searchInputRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Loading badge to the right of the search input */
+.searchLoadingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--accent-glow);
+  border: 1px solid var(--badge-border);
+}
+
+.searchLoadingSpinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Place result: city bold, state muted */
+.placeResultCity {
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.placeResultState {
+  color: var(--muted);
+  font-size: 0.84rem;
+  margin-left: 0.3em;
+}
+
+/* ── State pill (PlacePicker) ── */
+.statePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--badge-bg);
+  border: 1px solid var(--badge-border);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem 0.25rem 0.65rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.statePillName {
+  line-height: 1;
+}
+
+.statePillClear {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.1rem;
+  border-radius: 50%;
+  transition: color 0.15s;
+}
+
+.statePillClear:hover {
+  color: var(--text);
+}
+
 .resultsSection {
   width: 100%;
   max-width: 980px;
@@ -541,7 +647,7 @@
   color: var(--text);
   letter-spacing: -0.03em;
   line-height: 1;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.35rem;
   text-shadow: var(--result-value-shadow);
 }
 
@@ -613,9 +719,136 @@
   border-radius: 9px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  font-size: 0.9rem;
-  line-height: 1.6;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+/* ── Stat card value row (primary + compare side-by-side) ── */
+.statValueRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.cmpValueBlock {
+  border-left: 2px solid var(--border);
+  padding-left: 1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.cmpValue {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  font-weight: 800;
+  color: var(--accent-2);
+  letter-spacing: -0.025em;
+  line-height: 1;
+  margin-bottom: 0.35rem;
+}
+
+:global(html[data-theme="dark"]) .cmpValue {
+  color: var(--accent);
+}
+
+.cmpLocation {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* ── Compare section ── */
+.compareSection {
+  width: 100%;
+  max-width: 980px;
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.btnCompare {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 1.5rem;
+  border-radius: 11px;
+  border: 1.5px dashed var(--border-hover);
+  background: transparent;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.btnCompare:hover {
+  border-color: var(--accent);
+  background: transparent;
+}
+
+.compareCard {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.4rem 1.75rem 1.4rem;
+}
+
+.compareTitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+.compareFields {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.compareActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+/* ── Bottom "Start New Lookup" button ── */
+.bottomActions {
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+  padding-bottom: 2rem;
+}
+
+.btnStartNew {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 2rem;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
   color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.btnStartNew:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
 }
 
 /* ── Screen-reader only utility ── */

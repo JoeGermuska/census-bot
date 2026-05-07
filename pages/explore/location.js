@@ -1,4 +1,4 @@
-// pages/explore/location.js — Step 2: choose state + city
+// pages/explore/location.js — Step 2: global place search
 import { useState, useEffect, useMemo, useRef } from "react";
 import Head from "next/head";
 import Link from "next/link";
@@ -6,121 +6,143 @@ import { useRouter } from "next/router";
 import SiteLayout from "../../components/SiteLayout";
 import ex from "../../styles/Explore.module.css";
 import homeStyles from "../../styles/Home.module.css";
-import {
-  EXPLORE_METRICS_STORAGE_KEY,
-  STATE_NAMES,
-} from "../../lib/censusConstants";
+import { EXPLORE_METRICS_STORAGE_KEY } from "../../lib/censusConstants";
 
-// ── Searchable city combobox ─────────────────────────────────────────────────
-function CityCombobox({ cities, value, onChange, disabled, loading }) {
-  const [query, setQuery]   = useState(value);
-  const [open, setOpen]     = useState(false);
+// ── Global place search ──────────────────────────────────────────────────────
+function GlobalPlaceSearch({ city, stateName, onSelect }) {
+  const initialDisplay = city && stateName ? `${city}, ${stateName}` : "";
+  const [query, setQuery] = useState(initialDisplay);
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [indexing, setIndexing] = useState(false);
   const [cursor, setCursor] = useState(-1);
-  const listRef  = useRef(null);
+  const debounceRef = useRef(null);
+  const retryRef = useRef(null);
+  const listRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Sync query with external value changes (e.g. state reset)
-  useEffect(() => { setQuery(value); }, [value]);
-
-  const filtered = useMemo(() => {
-    if (!query.trim()) return cities;
-    const q = query.toLowerCase();
-    return cities.filter(c => c.toLowerCase().includes(q));
-  }, [query, cities]);
-
-  function select(city) {
-    setQuery(city);
-    onChange(city);
-    setOpen(false);
-    setCursor(-1);
+  function doSearch(q) {
+    if (q.length < 2) { setResults([]); setOpen(false); setSearching(false); return; }
+    setSearching(true);
+    fetch(`/api/search-places?q=${encodeURIComponent(q)}&limit=15`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.indexing) {
+          setIndexing(true);
+          setResults([]);
+          // Retry once index is built
+          retryRef.current = setTimeout(() => doSearch(q), 1800);
+        } else {
+          setIndexing(false);
+          setResults(data.results || []);
+          setOpen((data.results || []).length > 0);
+        }
+        setSearching(false);
+      })
+      .catch(() => { setResults([]); setSearching(false); });
   }
 
-  function handleInput(e) {
-    setQuery(e.target.value);
-    onChange(""); // clear confirmed value while typing
-    setOpen(true);
+  function handleChange(e) {
+    const q = e.target.value;
+    setQuery(q);
+    onSelect("", ""); // clear confirmed selection while typing
     setCursor(-1);
+    clearTimeout(debounceRef.current);
+    clearTimeout(retryRef.current);
+    debounceRef.current = setTimeout(() => doSearch(q), 240);
+  }
+
+  function select(place) {
+    setQuery(place.display);
+    onSelect(place.name, place.state);
+    setOpen(false);
+    setCursor(-1);
+    setResults([]);
   }
 
   function handleKeyDown(e) {
-    if (!open && (e.key === "ArrowDown" || e.key === "Enter")) {
-      setOpen(true);
-      return;
-    }
+    if (!open) { if (e.key === "ArrowDown") setOpen(true); return; }
     if (e.key === "Escape") { setOpen(false); setCursor(-1); return; }
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setCursor(c => Math.min(c + 1, filtered.length - 1));
-    }
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setCursor(c => Math.max(c - 1, 0));
-    }
-    if (e.key === "Enter" && cursor >= 0 && filtered[cursor]) {
-      e.preventDefault();
-      select(filtered[cursor]);
-    }
+    if (e.key === "ArrowDown") { e.preventDefault(); setCursor(c => Math.min(c + 1, results.length - 1)); }
+    if (e.key === "ArrowUp") { e.preventDefault(); setCursor(c => Math.max(c - 1, 0)); }
+    if (e.key === "Enter" && cursor >= 0 && results[cursor]) { e.preventDefault(); select(results[cursor]); }
   }
 
-  // Scroll active item into view
   useEffect(() => {
     if (cursor < 0 || !listRef.current) return;
-    const item = listRef.current.children[cursor];
-    if (item) item.scrollIntoView({ block: "nearest" });
+    listRef.current.children[cursor]?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
 
+  useEffect(() => () => { clearTimeout(debounceRef.current); clearTimeout(retryRef.current); }, []);
+
+  const showLoading = searching || indexing;
+
   return (
-    <div className={ex.comboboxWrap}>
-      <input
-        ref={inputRef}
-        id="explore-city"
-        type="text"
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded={open}
-        aria-controls="city-listbox"
-        aria-haspopup="listbox"
-        autoComplete="off"
-        className={ex.comboboxInput}
-        value={query}
-        placeholder={
-          disabled
-            ? "Choose a state first"
-            : loading
-            ? "Loading places…"
-            : "Type to search any place in this state…"
-        }
-        disabled={disabled || loading}
-        onChange={handleInput}
-        onFocus={() => { if (!disabled) setOpen(true); }}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        onKeyDown={handleKeyDown}
-      />
-      {open && filtered.length > 0 && !disabled && (
-        <ul
-          id="city-listbox"
-          role="listbox"
-          aria-label="Cities"
-          ref={listRef}
-          className={ex.comboboxList}
-        >
-          {filtered.map((city, i) => (
-            <li
-              key={city}
-              role="option"
-              aria-selected={city === value}
-              className={`${ex.comboboxItem}${i === cursor ? ` ${ex.comboboxItemActive}` : ""}${city === value ? ` ${ex.comboboxItemSelected}` : ""}`}
-              onMouseDown={() => select(city)}
+    <div className={ex.fieldGroup}>
+      <label className={ex.fieldLabel} htmlFor="explore-place">Location</label>
+      <div className={ex.searchInputRow}>
+        <div className={ex.comboboxWrap} style={{ flex: 1 }}>
+          <input
+            ref={inputRef}
+            id="explore-place"
+            type="text"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={open}
+            aria-controls="place-listbox"
+            aria-haspopup="listbox"
+            autoComplete="off"
+            spellCheck={false}
+            className={ex.comboboxInput}
+            value={query}
+            placeholder="Search for a location…"
+            onChange={handleChange}
+            onFocus={() => { if (results.length > 0) setOpen(true); }}
+            onBlur={() => setTimeout(() => setOpen(false), 160)}
+            onKeyDown={handleKeyDown}
+          />
+
+          {open && results.length > 0 && (
+            <ul
+              id="place-listbox"
+              role="listbox"
+              aria-label="Matching locations"
+              ref={listRef}
+              className={ex.comboboxList}
             >
-              {city === value && <span className={ex.comboboxCheck} aria-hidden>✓</span>}
-              {city}
-            </li>
-          ))}
-        </ul>
-      )}
-      {open && filtered.length === 0 && !disabled && (
-        <div className={ex.comboboxEmpty}>No cities match "{query}"</div>
-      )}
+              {results.map((place, i) => (
+                <li
+                  key={place.display}
+                  role="option"
+                  aria-selected={place.name === city && place.state === stateName}
+                  className={`${ex.comboboxItem}${i === cursor ? ` ${ex.comboboxItemActive}` : ""}${place.name === city && place.state === stateName ? ` ${ex.comboboxItemSelected}` : ""}`}
+                  onMouseDown={() => select(place)}
+                >
+                  {place.name === city && place.state === stateName && (
+                    <span className={ex.comboboxCheck} aria-hidden>✓</span>
+                  )}
+                  <span className={ex.placeResultCity}>{place.name}</span>
+                  <span className={ex.placeResultState}>{place.state}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+
+          {open && !searching && !indexing && results.length === 0 && query.length >= 2 && (
+            <div className={ex.comboboxEmpty}>No locations match &ldquo;{query}&rdquo;</div>
+          )}
+        </div>
+
+        {/* Visible loading badge to the right of the input */}
+        {showLoading && (
+          <span className={ex.searchLoadingBadge} aria-live="polite">
+            <span className={ex.searchLoadingSpinner} />
+            Searching…
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -140,10 +162,6 @@ export default function ExploreLocation() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError]   = useState(null);
   const [progressWidth, setProgressWidth] = useState(fromProgress);
-  const [places, setPlaces]         = useState([]); // [{ name, type, raw }]
-  const [placesLoading, setPlacesLoading] = useState(false);
-  const [placesError, setPlacesError] = useState(null);
-  const placesCache = useRef(new Map()); // state name → places[]
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -154,62 +172,16 @@ export default function ExploreLocation() {
         router.replace("/explore");
         return;
       }
-
       const qState = Array.isArray(router.query.state) ? router.query.state[0] : router.query.state;
       const qCity  = Array.isArray(router.query.city)  ? router.query.city[0]  : router.query.city;
-      if (qState && STATE_NAMES.includes(qState)) {
-        setStateName(qState);
-        if (qCity) setCity(qCity); // validated against fetched places below
-      }
+      if (qState) setStateName(qState);
+      if (qCity)  setCity(qCity);
     } catch {
       router.replace("/explore");
       return;
     }
     setReady(true);
   }, [router]);
-
-  const cityNames = useMemo(() => places.map(p => p.name), [places]);
-
-  // Fetch the full Census Places list for the chosen state.
-  useEffect(() => {
-    if (!stateName) {
-      setPlaces([]);
-      setPlacesError(null);
-      return;
-    }
-    const cached = placesCache.current.get(stateName);
-    if (cached) {
-      setPlaces(cached);
-      setPlacesError(null);
-      return;
-    }
-    let cancelled = false;
-    setPlacesLoading(true);
-    setPlacesError(null);
-    (async () => {
-      try {
-        const res = await fetch(`/api/places?state=${encodeURIComponent(stateName)}`);
-        const data = await res.json();
-        if (cancelled) return;
-        if (!res.ok) {
-          setPlacesError(data?.error || "Couldn't load places for this state.");
-          setPlaces([]);
-          return;
-        }
-        const list = Array.isArray(data.places) ? data.places : [];
-        placesCache.current.set(stateName, list);
-        setPlaces(list);
-      } catch (err) {
-        if (!cancelled) {
-          setPlacesError("Network error loading places.");
-          setPlaces([]);
-        }
-      } finally {
-        if (!cancelled) setPlacesLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [stateName]);
 
   useEffect(() => {
     setProgressWidth(fromProgress);
@@ -220,25 +192,16 @@ export default function ExploreLocation() {
   const canContinue = !!(stateName && city);
 
   function viewResults() {
-    if (!canContinue) {
-      setFormError("Choose a state and a city. City is required.");
-      return;
-    }
+    if (!canContinue) { setFormError("Please select a location from the dropdown."); return; }
     setFormError(null);
     setSubmitting(true);
-    router.push({
-      pathname: "/explore/results",
-      query: { state: stateName, city, from: targetProgress },
-    });
+    router.push({ pathname: "/explore/results", query: { state: stateName, city, from: targetProgress } });
   }
 
   if (!ready) {
     return (
       <>
-        <Head>
-          <title>CensusBot — Explore</title>
-          <link rel="icon" href="/favicon.ico" />
-        </Head>
+        <Head><title>CensusBot — Explore</title><link rel="icon" href="/favicon.ico" /></Head>
         <SiteLayout>
           <p className={ex.hint} style={{ marginTop: "3rem" }}>Loading…</p>
         </SiteLayout>
@@ -250,7 +213,7 @@ export default function ExploreLocation() {
     <>
       <Head>
         <title>CensusBot — Explore (location)</title>
-        <meta name="description" content="Choose state and city for ACS lookup." />
+        <meta name="description" content="Search for a U.S. location to look up ACS data." />
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <SiteLayout>
@@ -270,43 +233,11 @@ export default function ExploreLocation() {
           <div className={ex.card}>
             <p className={ex.question}>Where do you want to look?</p>
 
-            <div className={ex.fieldGroup}>
-              <label className={ex.fieldLabel} htmlFor="explore-state">State</label>
-              <select
-                id="explore-state"
-                className={ex.select}
-                value={stateName}
-                onChange={e => {
-                  setStateName(e.target.value);
-                  setCity("");
-                  setFormError(null);
-                }}
-              >
-                <option value="">Select state…</option>
-                {STATE_NAMES.map(s => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className={ex.fieldGroup}>
-              <label className={ex.fieldLabel} htmlFor="explore-city">City</label>
-              <CityCombobox
-                cities={cityNames}
-                value={city}
-                disabled={!stateName}
-                loading={placesLoading}
-                onChange={val => {
-                  setCity(val);
-                  setFormError(null);
-                }}
-              />
-              {placesError && (
-                <p className={ex.hint} style={{ color: "var(--error)", marginTop: 6 }}>
-                  {placesError}
-                </p>
-              )}
-            </div>
+            <GlobalPlaceSearch
+              city={city}
+              stateName={stateName}
+              onSelect={(c, s) => { setCity(c); setStateName(s); setFormError(null); }}
+            />
 
             {formError && (
               <div className={homeStyles.error} style={{ marginTop: "1rem" }}>
@@ -316,16 +247,19 @@ export default function ExploreLocation() {
             )}
 
             <div className={ex.footerNav} style={{ marginTop: "1.25rem", maxWidth: "none" }}>
-              <Link href={{ pathname: "/explore", query: { from: targetProgress, restore: 1 } }} className={ex.btnBack}>
+              <Link
+                href={{ pathname: "/explore", query: { from: targetProgress, restore: 1 } }}
+                className={ex.btnBack}
+              >
                 ← Back
               </Link>
               <button
                 type="button"
-                className={ex.btnPrimary}
+                className={`${ex.btnPrimary}${canContinue ? ` ${ex.btnPrimaryActive}` : ""}`}
                 disabled={submitting || !canContinue}
                 onClick={viewResults}
               >
-                {submitting ? <span className={ex.spinner} /> : "View Results"}
+                {submitting ? <span className={ex.spinner} /> : "View Results →"}
               </button>
             </div>
           </div>
