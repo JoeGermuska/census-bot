@@ -165,19 +165,22 @@ const ACS_DOCS_TOOL = {
   },
 };
 
-const TREND_ROUTE_KEYWORDS = [
-  "trend",
-  "over time",
-  "change",
+// Words that explicitly ask for a chart or graph. Used *only* to refine the
+// fast path's chart route inside statistic mode — they never gate the
+// agentic loop's output contract.
+//
+// Mode is the single source of truth for whether a chart is wanted. This
+// predicate lets a statistic-mode user opt in to the chart route by being
+// explicit ("rent chart for Austin") without polluting other modes.
+//
+// Words like "trend" / "change" / "compare" / "historical" describe CONTENT
+// (time-series, side-by-side) — not FORM (a chart). They're intentionally
+// excluded so statistic-mode users typing those still get numbers.
+const EXPLICIT_CHART_KEYWORDS = [
   "graph",
   "chart",
   "visualization",
-  "historical",
-  "compare",
-  "comparison",
-  "since",
-  "increase",
-  "decrease",
+  "visualize",
 ];
 
 const BASE_SYSTEM_PROMPT = `You are a knowledgeable U.S. Census data assistant built into CensusBot.
@@ -187,41 +190,42 @@ You have access to a live Census data lookup tool. Use it proactively when a use
 
 Available metrics: ${QUERY_TYPES.join(", ")}.
 
-CRITICAL TOOL RULES:
-- You MUST use lookup_census_data ONLY for single-year statistics.
-- If the user requests ANY of the following:
-  - trends
-  - changes over time
-  - graphs
-  - historical comparisons
-  - multi-year analysis
-  YOU MUST NOT attempt to answer using single-year data.
-  Instead, you MUST explicitly say:
-  "This requires time-series data. I will use the trend tool."
-- NEVER suggest Census API URLs, variables, tables, or methodology unless it comes directly from tool output.
-- NEVER guess ACS tables or variables.
-- NEVER describe how to fetch data externally.
+TOOL RULES:
+- lookup_census_data is for single-year statistics about a specific place.
+- get_census_trend is for multi-year time-series data about a place; the
+  server combines its results into a chart payload. Only call it when the
+  user actually wants a chart — see the mode-specific instructions below.
+- search_acs_docs is for ACS concepts, methodology, and variable definitions.
 
-CRITICAL VISUALIZATION OUTPUT RULES:
-- For graph/chart/trend/change-over-time/historical-comparison/visualization requests, you MUST call get_census_trend.
-- For comparisons (e.g. "compare Austin and Dallas"), call get_census_trend ONCE PER CITY in parallel — the server combines them into a multi-line chart automatically.
-- The server constructs the final chart JSON from tool results. Your job is only to make the right tool calls; do not hand-author chart JSON.
-- Do NOT include any explanation text with chart JSON.
-- Do NOT output CSV.
-- Do NOT output markdown tables.
-- Do NOT suggest external tools.
-- Do NOT describe graphing steps.
-- Do NOT mention Recharts, Excel, or Sheets.
-- Do NOT output raw Census variable IDs unless explicitly asked.
+GROUNDING RULES (cite-what-you-have, never fabricate):
+- You MAY mention any ACS table ID, dataset name, source label, doc title,
+  page number, or methodology detail that came from a tool result you just
+  received (e.g. lookup_census_data returns a "table" field; search_acs_docs
+  returns "chunk_id" + "doc_title").
+- You MUST NOT invent table IDs, variable IDs, dataset names, page numbers,
+  or Census API URLs from your own knowledge. If you didn't see it in a tool
+  result, don't say it. The Census table catalog is large and easy to
+  confuse — a wrong table ID looks authoritative and misleads the user.
+- If the user asks "what table covers X?" or "what's the API URL for Y?",
+  call search_acs_docs first; only quote what it returns.
+- Do NOT describe how to fetch data externally (manual API URL construction,
+  scraping, etc.) unless it comes directly from search_acs_docs.
 
-If no tool data is available:
-- DO NOT guess datasets
-- DO NOT suggest tables (B17001, etc.)
-- DO NOT construct API URLs
-- For chart/trend requests, respond ONLY:
-  {"type":"error","message":"Unable to generate chart data."}
-- For non-chart requests, respond:
-  "I don’t have time-series Census access for that request yet."
+CHART OUTPUT RULES (apply only when the mode-specific instructions below say to call get_census_trend):
+- The server constructs the final chart JSON from tool results. Your job is
+  only to make the right tool calls; NEVER hand-author chart JSON or any
+  object containing "type":"chart" / "type":"trend_chart".
+- If a tool call you'd need can't be made (e.g. you don't have city + state),
+  say so in plain text — do NOT fabricate chart data.
+- Do NOT include explanation text with chart JSON.
+- Do NOT output CSV, markdown tables, external-tool suggestions, graphing
+  steps, mentions of Recharts/Excel/Sheets, or raw variable IDs.
+
+If no tool succeeded for the user's question:
+- Don't fill the gap with invented tables, variable IDs, or API URLs from
+  your own knowledge — same grounding rule applies.
+- Say in plain text what you couldn't get and what would help (e.g. "I
+  couldn't resolve that place — try 'City, State' format").
 
 DOCUMENTATION QUESTIONS (concepts, methodology, definitions):
 When the user asks about WHAT something means, HOW the ACS measures it, MOEs,
@@ -277,12 +281,29 @@ const MODE_SKILLS = {
 };
 
 const MODE_PROMPTS = {
-  learn: `\nMode: LEARN. The user wants to understand ACS data concepts. Focus on clear explanations. Use the tool only if they ask about a specific place. Prefer plain-language teaching over raw numbers.`,
-  statistic: `\nMode: FIND STATISTIC. The user wants a specific number. Use the lookup tool immediately when they provide a metric and place. Only report data returned by tools. Never add ACS table IDs, variable IDs, URL instructions, or methodology unless explicitly present in tool output.`,
-  visualize: `\nMode: VISUALIZATION. The user wants chart/visualization help. For multi-year or trend requests, call the trend tool and return chart-ready data. Never provide external API instructions, ACS table guesses, or variable guesses.`,
+  learn: `
+Mode: LEARN. The user wants to understand ACS concepts, methodology, definitions, MOEs, what a table covers, etc.
+- Call search_acs_docs FIRST for any concept/methodology question, then answer using the returned passages.
+- Call lookup_census_data only if the user asks for a specific number about a specific place.
+- NEVER call get_census_trend in this mode — even if the user mentions trends or comparisons. Charts belong in Visualization mode.
+- Prefer plain-language teaching over raw numbers.`,
+  statistic: `
+Mode: FIND STATISTIC. The user wants specific numbers, NOT charts.
+- Always call lookup_census_data when they give a metric and place.
+- For "compare X and Y" / "X vs Y" queries: call lookup_census_data ONCE PER PLACE in parallel and write a short side-by-side text comparison. NEVER call get_census_trend for compare queries in this mode.
+- For "trend" / "over time" / "change" / "historical" / "since 2020" wording: still call lookup_census_data and return the latest single-year value as plain text. The user is in Statistic mode — if they want a chart, they will switch modes.
+- The ONLY exception is if the user explicitly says "graph", "chart", "visualize", or "visualization" — then call get_census_trend so the server can build the chart.
+- Only report data returned by tools. Never add ACS table IDs, variable IDs, URL instructions, or methodology unless explicitly present in tool output.`,
+  visualize: `
+Mode: VISUALIZATION. The user wants charts. Every answer in this mode is a chart.
+- Always call get_census_trend (never lookup_census_data) for the data series.
+- For "compare X and Y" queries: call get_census_trend ONCE PER PLACE in parallel — the server combines the results into a multi-line chart.
+- For single-place queries: one get_census_trend call is enough; the server renders a single line.
+- If the user's request can't be expressed as a chart (no place, ambiguous metric, etc.), say so in plain text — do NOT call lookup_census_data instead. Charts only.
+- Never provide external API instructions, ACS table guesses, or variable guesses.`,
 };
 
-function buildSystemPrompt(userMessage, mode, forceTrendRouting = false) {
+function buildSystemPrompt(userMessage, mode) {
   const alwaysOn = loadAlwaysOnSkills();
 
   // Load mode-specific skills
@@ -296,13 +317,6 @@ function buildSystemPrompt(userMessage, mode, forceTrendRouting = false) {
   const allSkills = [...new Set([...modeSkills, ...conditional])];
 
   const parts = [BASE_SYSTEM_PROMPT + (MODE_PROMPTS[mode] || "")];
-  if (forceTrendRouting) {
-    parts.push(
-      "User request requires time-series analysis.\n" +
-      "You MUST use the /api/trend endpoint via tool routing.\n" +
-      "Do not attempt single-year lookup."
-    );
-  }
   if (alwaysOn.length > 0) parts.push("---\n" + alwaysOn.join("\n\n---\n"));
   if (allSkills.length > 0) parts.push("---\n" + allSkills.join("\n\n---\n"));
   const prompt = parts.join("\n\n");
@@ -384,9 +398,11 @@ async function runCensusTool(toolInput) {
   }
 }
 
-function needsTrendRouting(text) {
+// True when the user's message contains an explicit chart/graph word.
+// Only used inside the statistic-mode fast path to opt into the chart route.
+function wantsExplicitChart(text) {
   const lower = String(text || "").toLowerCase();
-  return TREND_ROUTE_KEYWORDS.some((kw) => lower.includes(kw));
+  return EXPLICIT_CHART_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
 async function runTrendTool(req, toolInput) {
@@ -933,9 +949,11 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
     });
   }
 
-  // Path 1: trend routing — runs first when the user explicitly wants a time-series.
-  // Only fires when parseQuery resolves the geo (otherwise we can't query the trend API).
-  if (needsTrendRouting(userMsg)) {
+  // Path 1: chart route — runs only when the user *explicitly* asked for a
+  // chart/graph (e.g. "rent chart for Austin"). Statistic mode is otherwise
+  // a numbers-only mode; this is the single allowed opt-in into the chart
+  // tool. Only fires when parseQuery also resolves a clear geo.
+  if (wantsExplicitChart(userMsg)) {
     const parsed = parseQuery(userMsg);
     const metricLabel = inferTrendMetricLabel(userMsg);
 
@@ -1148,7 +1166,9 @@ export default async function handler(req, res) {
     let finalReply = null;
     const trendSeries = []; // collected across tool calls for multi-line comparisons
     const loopDeadline = Date.now() + LOOP_TIMEOUT_MS;
-    const visualizationRequest = needsTrendRouting(initialUserMsg) || mode === "visualize";
+    // Output contract: charts are required only in visualize mode. Statistic
+    // and learn modes always return text replies — keywords don't override that.
+    const visualizationRequest = mode === "visualize";
 
     for (let i = 0; i < 5; i++) {
       // Enforce total loop timeout
@@ -1158,9 +1178,7 @@ export default async function handler(req, res) {
       }
 
       const latestUserMsg = getLatestUserMessage(currentMessages);
-      const forceTrendRouting = needsTrendRouting(latestUserMsg) || mode === "visualize";
-
-      const systemPrompt = buildSystemPrompt(latestUserMsg, mode, forceTrendRouting);
+      const systemPrompt = buildSystemPrompt(latestUserMsg, mode);
 
       // Race the Claude call against the remaining timeout budget
       const responsePromise = client.messages.create({
@@ -1256,7 +1274,7 @@ export default async function handler(req, res) {
         const fallbackResponse = await client.messages.create({
           model: MODEL,
           max_tokens: MAX_TOKENS,
-          system: buildSystemPrompt(latestUserMsg, mode, needsTrendRouting(latestUserMsg)) +
+          system: buildSystemPrompt(latestUserMsg, mode) +
             '\n\nNote: live data lookup is unavailable. Respond exactly: "I don’t have time-series Census access for that request yet."',
           messages,  // use original messages, not the tool-augmented ones
         });

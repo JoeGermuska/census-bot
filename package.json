@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "fetch:acs-docs": "node scripts/fetch-acs-docs.mjs",
-    "index": "node scripts/index-acs-docs.mjs"
+    "index": "node scripts/index-acs-docs.mjs",
+    "fetch:acs-tables": "node scripts/fetch-acs-tables.mjs",
+    "index:tables": "node scripts/index-acs-tables.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.94.0",
