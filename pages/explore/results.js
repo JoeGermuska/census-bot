@@ -375,7 +375,7 @@ export default function ExploreResults() {
                           ? <><CardSpinner /> Loading chart…</>
                           : chartVisible
                             ? "↑ Hide Chart"
-                            : "📈 Show Trend"}
+                            : "↓ Show Trend"}
                       </button>
 
                       {/* Inline chart + bottom-line summary */}

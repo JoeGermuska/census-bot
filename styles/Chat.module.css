@@ -582,7 +582,10 @@
 
 .chartOverlay {
   position: fixed;
-  inset: 2.5vh 2vw;
+  top: 7vh;
+  right: 2vw;
+  bottom: 2.5vh;
+  left: 2vw;
   z-index: 60;
   background: rgba(3, 6, 23, 0.82);
   backdrop-filter: blur(2px);

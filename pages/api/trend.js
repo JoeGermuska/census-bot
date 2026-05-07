@@ -3,8 +3,14 @@ import { fetchCensusVariable } from "../../lib/censusApi";
 import { parseQuery, VARIABLE_MAP } from "../../lib/censusTranslator";
 import { hasRateConfig, getRateDenominator, getRateScale } from "../../lib/censusRates";
 import { validateValue, detectAnomalies } from "../../lib/validateCensusData";
+import { CURRENT_ACS_YEAR } from "../../lib/censusConstants";
 
 const MIN_YEAR = 2009;
+// ACS 1-year estimates (more granular, reliable for annual trends) only cover places with
+// 65,000+ population. Below that threshold we restrict to 5 years to avoid sparse/zero data.
+const LARGE_CITY_POPULATION = 65000;
+const LARGE_CITY_MAX_YEARS = 10;
+const SMALL_CITY_MAX_YEARS = 5;
 
 function isValidYear(value) {
   return Number.isInteger(value) && value >= MIN_YEAR;
@@ -78,57 +84,87 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing or unsupported metric for trend query." });
   }
 
+  // Determine city population to enforce appropriate year-range limits.
+  // ACS 5-year data for small cities (<65K) is sparse before recent years — cap accordingly.
+  let effectiveStartYear = startYear;
+  try {
+    const population = await fetchCensusVariable({
+      year: Number(CURRENT_ACS_YEAR),
+      variable: "B01003_001E",
+      city,
+      state,
+    });
+    const maxYears = population >= LARGE_CITY_POPULATION ? LARGE_CITY_MAX_YEARS : SMALL_CITY_MAX_YEARS;
+    effectiveStartYear = Math.max(startYear, endYear - maxYears + 1);
+  } catch {
+    // If population lookup fails, fall back to a conservative 5-year window.
+    effectiveStartYear = Math.max(startYear, endYear - SMALL_CITY_MAX_YEARS + 1);
+  }
+
   const points = [];
 
-  try {
-    for (let year = startYear; year <= endYear; year += 1) {
-      // Sequential requests by design for predictable API usage.
-      const metricValue = await fetchCensusVariable({
+  for (let year = effectiveStartYear; year <= endYear; year += 1) {
+    // Sequential requests by design for predictable API usage.
+    let metricValue;
+    try {
+      metricValue = await fetchCensusVariable({
         year,
         variable: variable.id,
         city,
         state,
       });
+    } catch (err) {
+      // Skip years where data is unavailable rather than aborting the whole request.
+      points.push({ year, numericValue: null, warning: err?.message || "No data available" });
+      continue;
+    }
 
-      let numericValue = metricValue;
+    let numericValue = metricValue;
 
-      if (shouldComputeRate(variable.id)) {
-        const denominatorId = getDenominatorVariable(variable.id);
-        const denominator = await fetchCensusVariable({
+    if (shouldComputeRate(variable.id)) {
+      const denominatorId = getDenominatorVariable(variable.id);
+      let denominator;
+      try {
+        denominator = await fetchCensusVariable({
           year,
           variable: denominatorId,
           city,
           state,
         });
-
-        if (!Number.isFinite(denominator) || denominator <= 0) {
-          throw new Error(`Invalid denominator value for ${variable.id} in ${city}, ${state} (${year}).`);
-        }
-
-        numericValue = (metricValue / denominator) * getScale(variable.id);
-      }
-
-      const finalValue = Number(numericValue.toFixed(2));
-      const validation = validateValue(variable.id, finalValue);
-      if (!validation.ok) {
-        points.push({ year, numericValue: null, warning: validation.reason });
+      } catch (err) {
+        points.push({ year, numericValue: null, warning: `Denominator unavailable: ${err?.message}` });
         continue;
       }
 
-      const prevNumericValue = points.length > 0 ? points[points.length - 1].numericValue : null;
-      const anomaly = detectAnomalies(finalValue, prevNumericValue);
-      points.push({
-        year,
-        numericValue: finalValue,
-        ...(anomaly.anomaly ? { warning: anomaly.message } : {}),
-      });
+      if (!Number.isFinite(denominator) || denominator <= 0) {
+        points.push({ year, numericValue: null, warning: `Invalid denominator for ${year}` });
+        continue;
+      }
+
+      numericValue = (metricValue / denominator) * getScale(variable.id);
     }
 
-    return res.status(200).json(points);
-  } catch (err) {
-    console.error("Trend fetch error:", err);
-    return res.status(500).json({
-      error: err?.message || "Failed to fetch Census trend data.",
+    const finalValue = Number(numericValue.toFixed(2));
+    const validation = validateValue(variable.id, finalValue);
+    if (!validation.ok) {
+      points.push({ year, numericValue: null, warning: validation.reason });
+      continue;
+    }
+
+    const prevNumericValue = points.length > 0 ? points[points.length - 1].numericValue : null;
+    const anomaly = detectAnomalies(finalValue, prevNumericValue);
+    points.push({
+      year,
+      numericValue: finalValue,
+      ...(anomaly.anomaly ? { warning: anomaly.message } : {}),
     });
   }
+
+  if (points.length === 0 || points.every(p => p.numericValue == null)) {
+    return res.status(500).json({
+      error: `No Census data found for "${city}, ${state}" in the requested year range.`,
+    });
+  }
+
+  return res.status(200).json(points);
 }

@@ -455,7 +455,7 @@ export default function ChatPage() {
 
               {/* Limit notice */}
               <div className={styles.limitNotice}>
-                💬 Conversations limited to 10 exchanges. Click <strong>Start over</strong> to reset.
+                Conversations limited to 10 exchanges. Click <strong>Start over</strong> to reset.
               </div>
 
               {/* Message list / suggestions */}
