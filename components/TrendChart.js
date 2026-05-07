@@ -5,6 +5,7 @@ import {
   Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import styles from "../styles/Home.module.css";
+import { buildCensusProfileUrl } from "../lib/censusConstants";
 
 const SERIES_COLORS_LIGHT = ["#1a4480", "#2378c3", "#5b8ec5", "#7aa7d9", "#143664"];
 const SERIES_COLORS_DARK  = ["#60b4ff", "#89cfff", "#3d9be8", "#a8d8ff", "#2378c3"];
@@ -432,8 +433,23 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
           display: "flex", alignItems: "center", justifyContent: "space-between",
           flexWrap: "wrap", gap: "0.5rem",
         }}>
-          <span style={{ color: "var(--chart-source)", fontSize: 11 }}>
-            {source}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <a
+              href={(() => {
+                const ci = (location || "").indexOf(",");
+                const city  = ci > -1 ? location.slice(0, ci).trim() : location || "";
+                const state = ci > -1 ? location.slice(ci + 1).trim() : "";
+                return buildCensusProfileUrl(city, state, metric);
+              })()}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: "var(--chart-source)", fontSize: 11,
+                textDecoration: "underline", textUnderlineOffset: 2,
+              }}
+            >
+              {source}
+            </a>
             <ACSTooltip />
           </span>
           {rows.length > 0 && (

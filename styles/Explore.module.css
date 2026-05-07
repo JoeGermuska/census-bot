@@ -485,7 +485,7 @@
   overflow: hidden;
   opacity: 0;
   animation: cardReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .statCard::before {

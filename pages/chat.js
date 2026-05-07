@@ -5,6 +5,7 @@ import SiteLayout from "../components/SiteLayout";
 import TrendChart from "../components/TrendChart";
 import ChatInputBox from "../components/ChatInputBox";
 import styles from "../styles/Chat.module.css";
+import { buildCensusProfileUrl } from "../lib/censusConstants";
 
 const MAX_EXCHANGES = 10;
 
@@ -189,6 +190,24 @@ function formatStatValue(raw, unit) {
   }
 }
 
+// ── Source link ───────────────────────────────────────────────────────────────
+function SourceFooter({ source, metric, place }) {
+  const commaIdx = (place || "").indexOf(",");
+  const city  = commaIdx > -1 ? place.slice(0, commaIdx).trim() : place || "";
+  const state = commaIdx > -1 ? place.slice(commaIdx + 1).trim() : "";
+  return (
+    <a
+      href={buildCensusProfileUrl(city, state, metric)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={styles.statCardSource}
+      style={{ textDecoration: "underline", textUnderlineOffset: 2 }}
+    >
+      {source}
+    </a>
+  );
+}
+
 // ── Stat card (big number + label + place) ──────────────────────────────────
 // Rendered inside the assistant bubble whenever the response carries a
 // `structured` payload from the deterministic fast path.
@@ -205,7 +224,7 @@ function StatCard({ structured }) {
       <div className={styles.statCardMeta}>
         <span className={styles.statCardPlace}>{structured.place}</span>
         <span className={styles.statCardDot}>·</span>
-        <span className={styles.statCardSource}>{sourceLabel}</span>
+        <SourceFooter source={sourceLabel} metric={structured.variable} place={structured.place} />
       </div>
       {tables.length > 0 && (
         <div className={styles.statCardSources}>

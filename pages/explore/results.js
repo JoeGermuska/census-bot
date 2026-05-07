@@ -11,6 +11,7 @@ import {
   EXPLORE_LOCATION_STORAGE_KEY,
   buildCityStateQuery,
   CURRENT_ACS_YEAR,
+  buildCensusProfileUrl,
 } from "../../lib/censusConstants";
 
 // Plain-English bottom-line summary for a trend result
@@ -54,6 +55,20 @@ function getMetricMeta(metricLabel) {
   if (l.includes("commute") || l.includes("travel")) return { color, icon: "🚇" };
   if (l.includes("bachelor") || l.includes("education")) return { color, icon: "🎓" };
   return { color, icon: "📌" };
+}
+
+function SourceFooter({ source, metric, city, stateName }) {
+  return (
+    <a
+      href={buildCensusProfileUrl(city, stateName, metric)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={ex.statSource}
+      style={{ textDecoration: "underline", textUnderlineOffset: 2 }}
+    >
+      {source}
+    </a>
+  );
 }
 
 function CardSpinner() {
@@ -399,7 +414,12 @@ export default function ExploreResults() {
                       )}
 
                       {/* Source */}
-                      <div className={ex.statSource}>{result.source}</div>
+                      <SourceFooter
+                        source={result.source}
+                        metric={result.metric}
+                        city={city}
+                        stateName={stateName}
+                      />
                     </div>
                   );
                 })}
