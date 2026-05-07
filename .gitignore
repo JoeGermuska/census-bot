@@ -28,6 +28,11 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# raw ACS source files — regeneratable via `npm run fetch:acs-docs` and
+# `npm run fetch:acs-tables`. Only the indexed JSON files (docs/index.json,
+# docs/tables-index.json) are checked in.
+docs/raw/
+
 # vercel
 .vercel
 .claude/worktrees/
