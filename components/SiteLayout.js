@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import ThemeToggle from "./ThemeToggle";
-import LightningIcon from "./LightningIcon";
 import styles from "../styles/SiteLayout.module.css";
 
 function NavIconHome() {
@@ -27,8 +26,27 @@ function NavIconInfo() {
 
 function NavIconChat() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+function NavIconSearch() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }
@@ -38,7 +56,7 @@ export default function SiteLayout({ children }) {
   const path = router.pathname;
   const [scrolled, setScrolled] = useState(false);
 
-  const exploreActive = path === "/explore" || path.startsWith("/explore/");
+  const chatActive = path === "/chat" || path.startsWith("/chat/");
 
   useEffect(() => {
     const onScroll = () => {
@@ -59,7 +77,6 @@ export default function SiteLayout({ children }) {
 
   return (
     <div className={styles.shell}>
-      <div className={styles.orb} aria-hidden />
       <nav className={`${styles.nav} ${scrolled ? styles.navScrolled : ""}`}>
         <div className={styles.navLeft}>
           <Link href="/" className={styles.logoText}>
@@ -73,15 +90,15 @@ export default function SiteLayout({ children }) {
           <Link href="/about" className={linkClass("/about")}>
             <NavIconInfo /> About
           </Link>
-          <Link href="/chat" className={linkClass("/chat")}>
-            <NavIconChat /> Ask Question
+          <Link href="/explore" className={linkClass("/explore")}>
+            <NavIconSearch /> Quick Lookup
           </Link>
           <Link
-            href="/explore"
-            className={`${styles.cta} ${exploreActive ? styles.ctaActive : ""}`}
+            href="/chat"
+            className={`${styles.cta} ${chatActive ? styles.ctaActive : ""}`}
           >
-            <LightningIcon className={styles.ctaIcon} size={17} />
-            Explore Data
+            <NavIconChat />
+            Ask Question
           </Link>
           <ThemeToggle />
         </div>

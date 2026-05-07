@@ -10,6 +10,18 @@ import {
   EXPLORE_LOCATION_STORAGE_KEY,
 } from "../../lib/censusConstants";
 
+// Maps homepage chip slugs (?m=<slug>) to QUERY_TYPES entries.
+const SLUG_TO_METRIC = {
+  income: "median income",
+  rent: "median rent",
+  population: "population",
+  poverty: "poverty rate",
+  age: "median age",
+  employment: "unemployment rate",
+  education: "median household income",
+  housing: "median home value",
+};
+
 export default function ExploreMetrics() {
   const router = useRouter();
   const [selected, setSelected] = useState(() => new Set());
@@ -24,6 +36,12 @@ export default function ExploreMetrics() {
     const raw = router.query.restore;
     return (Array.isArray(raw) ? raw[0] : raw) === "1";
   }, [router.query.restore]);
+  const presetMetric = useMemo(() => {
+    const raw = router.query.m;
+    const slug = Array.isArray(raw) ? raw[0] : raw;
+    if (!slug) return null;
+    return SLUG_TO_METRIC[slug] || null;
+  }, [router.query.m]);
 
   const toggle = useCallback(metric => {
     setSelected(prev => {
@@ -50,12 +68,12 @@ export default function ExploreMetrics() {
       } else {
         sessionStorage.removeItem(EXPLORE_METRICS_STORAGE_KEY);
         sessionStorage.removeItem(EXPLORE_LOCATION_STORAGE_KEY);
-        setSelected(new Set());
+        setSelected(presetMetric ? new Set([presetMetric]) : new Set());
       }
     } catch {
-      setSelected(new Set());
+      setSelected(presetMetric ? new Set([presetMetric]) : new Set());
     }
-  }, [shouldRestore]);
+  }, [shouldRestore, presetMetric]);
 
   function handleNext() {
     const list = [...selected];

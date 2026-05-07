@@ -11,18 +11,9 @@
   font-family: inherit;
 }
 
-/* Background glow */
+/* Background glow — disabled in the new theme */
 .orb {
-  position: fixed;
-  top: -200px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 600px;
-  height: 600px;
-  border-radius: 50%;
-  background: var(--orb-gradient);
-  pointer-events: none;
-  z-index: 0;
+  display: none;
 }
 
 /* ── Header ── */
@@ -47,24 +38,13 @@
 }
 
 .title {
-  font-family: inherit;
+  font-family: var(--font-head);
   font-size: clamp(2.5rem, 8vw, 4.5rem);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1;
   margin-bottom: 0.75rem;
-  /* Solid fallback — avoids invisible text if gradient / clip is unsupported or variables fail */
-  color: var(--text);
-}
-
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
-  .title {
-    background-image: var(--title-gradient);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    color: transparent;
-  }
+  color: var(--accent);
 }
 
 .subtitle {
@@ -133,15 +113,15 @@
   flex-shrink: 0;
   background: var(--accent);
   color: #fff;
-  border: none;
-  border-radius: 5px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
   font-family: inherit;
   font-size: 0.7rem;
   font-weight: 500;
   letter-spacing: 0.12em;
   padding: 0.45em 1em;
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -150,8 +130,8 @@
 }
 
 .button:hover:not(:disabled) {
-  opacity: 0.85;
-  transform: translateY(-1px);
+  background: #143664;
+  border-color: #143664;
 }
 
 .button:disabled {

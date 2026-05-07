@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import styles from "../styles/Home.module.css";
 
-const SERIES_COLORS = ["#7c3aed", "#a855f7", "#c084fc", "#6d28d9", "#9333ea"];
+const SERIES_COLORS = ["#1a4480", "#2378c3", "#5b8ec5", "#7aa7d9", "#143664"];
 
 function formatValueForMetric(rawValue, metric) {
   if (!Number.isFinite(rawValue)) return "N/A";

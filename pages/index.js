@@ -2,101 +2,20 @@
 import Head from "next/head";
 import Link from "next/link";
 import SiteLayout from "../components/SiteLayout";
-import LightningIcon from "../components/LightningIcon";
 import ShimmerText from "../components/ShimmerText";
 import landing from "../styles/Landing.module.css";
 
-
-// ── Shared card content ───────────────────────────────────────────────────
-function IconChart() {
-  return (
-    <svg className={landing.featureIcon} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M4 20V5" />
-      <path d="M4 20H20" />
-      <rect x="7" y="11" width="3" height="7" rx="1" />
-      <rect x="12" y="8" width="3" height="10" rx="1" />
-      <rect x="17" y="6" width="3" height="12" rx="1" />
-    </svg>
-  );
-}
-function IconPin() {
-  return (
-    <svg className={landing.featureIcon} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path d="M12 21C7 16.2 5 13.8 5 10.5A7 7 0 0 1 19 10.5C19 13.8 17 16.2 12 21Z" />
-      <circle cx="12" cy="10.5" r="2.25" />
-    </svg>
-  );
-}
-function IconLock() {
-  return (
-    <svg className={landing.featureIcon} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="5" y="11" width="14" height="9" rx="2" />
-      <path d="M9 11C9 6.9 11.8 4 15 4C17.8 4 20 6.2 20 9" />
-    </svg>
-  );
-}
-
-const CARDS = [
-  {
-    href: "/explore",
-    cardClass: `${landing.featureCard} ${landing.featureCardPurple}`,
-    iconClass: `${landing.iconCircle} ${landing.iconPurple}`,
-    aria: "Explore ACS Metrics",
-    title: "ACS Metrics",
-    body: "Explore key metrics like income, rent, population, poverty, age, and employment.",
-    Icon: IconChart,
-  },
-  {
-    href: "/chat",
-    cardClass: `${landing.featureCard} ${landing.featureCardBlue}`,
-    iconClass: `${landing.iconCircle} ${landing.iconBlue}`,
-    aria: "Explore Places and Trends",
-    title: "Places & Trends",
-    body: "Focus on a city and state, and view interactive charts showing changes over the past five years.",
-    Icon: IconPin,
-  },
-  {
-    href: "/about",
-    cardClass: `${landing.featureCard} ${landing.featureCardTeal}`,
-    iconClass: `${landing.iconCircle} ${landing.iconTeal}`,
-    aria: "Learn about Open Data",
-    title: "Open Data",
-    body: "All results use publicly available ACS 5-year estimates, with clear source information included.",
-    Icon: IconLock,
-  },
+const QUICK_LOOKUP_CHIPS = [
+  { slug: "income", label: "Median Income" },
+  { slug: "rent", label: "Rent" },
+  { slug: "population", label: "Population" },
+  { slug: "poverty", label: "Poverty" },
+  { slug: "age", label: "Age" },
+  { slug: "employment", label: "Employment" },
+  { slug: "education", label: "Education" },
+  { slug: "housing", label: "Housing" },
 ];
 
-function FeatureCardContent({ card }) {
-  return (
-    <div className={landing.featureCardInner}>
-      <div className={card.iconClass}>
-        <card.Icon />
-      </div>
-      <h2 className={landing.featureTitle}>{card.title}</h2>
-      <p className={landing.featureBody}>{card.body}</p>
-    </div>
-  );
-}
-
-function StaticCardGrid() {
-  return (
-    <div className={landing.cardGrid}>
-      {CARDS.map((card) => (
-        <Link
-          key={card.href}
-          href={card.href}
-          className={card.cardClass}
-          aria-label={card.aria}
-        >
-          <FeatureCardContent card={card} />
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-
-// ── Page ──────────────────────────────────────────────────────────────────
 export default function Home() {
   return (
     <>
@@ -121,17 +40,54 @@ export default function Home() {
               </p>
             </section>
 
-            <StaticCardGrid />
+            <div className={landing.homeActions}>
+              <section className={landing.quickstart}>
+                <div className={landing.eyebrow}>Quick Lookup</div>
+                <h2 className={landing.quickstartTitle}>What do you want to know about?</h2>
+                <p className={landing.quickstartSub}>
+                  Pick a metric to begin, or pick up where you left off.
+                </p>
+                <div className={landing.chipRow}>
+                  {QUICK_LOOKUP_CHIPS.map(chip => (
+                    <Link
+                      key={chip.slug}
+                      href={`/explore?m=${chip.slug}`}
+                      className={landing.chip}
+                    >
+                      {chip.label}
+                    </Link>
+                  ))}
+                </div>
+                <div className={landing.quickstartFoot}>
+                  <span>Browse all 40+ ACS metrics</span>
+                  <Link href="/explore">All metrics →</Link>
+                </div>
+              </section>
 
-            <div className={landing.ctaRow}>
-              <Link href="/explore" className={landing.ctaLarge}>
-                <span className={landing.ctaLargeIcon}>
-                  <LightningIcon size={34} />
-                </span>
-                <span className={landing.ctaLargeLabel}>Explore Data</span>
-                <span className={landing.ctaLargeArrow} aria-hidden>→</span>
+              <Link className={landing.secondary} href="/chat">
+                <div className={landing.secondaryRow}>
+                  <div>
+                    <div className={landing.secondaryTitle}>Ask a question</div>
+                    <div className={landing.secondarySub}>
+                      Type a question in plain English, like &ldquo;What&apos;s the median rent in Austin?&rdquo;
+                      Or ask for charts and visualizations.
+                    </div>
+                  </div>
+                  <div className={landing.secondaryArrow} aria-hidden>→</div>
+                </div>
               </Link>
-              <p className={landing.ctaSub}>See where the data takes you</p>
+
+              <Link className={landing.secondary} href="/about">
+                <div className={landing.secondaryRow}>
+                  <div>
+                    <div className={landing.secondaryTitle}>Learn more about ACS data</div>
+                    <div className={landing.secondarySub}>
+                      Where the numbers come from, how to read them, and what the 5-year estimates mean.
+                    </div>
+                  </div>
+                  <div className={landing.secondaryArrow} aria-hidden>→</div>
+                </div>
+              </Link>
             </div>
 
             <footer className={landing.footerNote}>

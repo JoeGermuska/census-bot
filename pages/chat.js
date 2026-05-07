@@ -207,7 +207,38 @@ function TypingIndicator() {
   );
 }
 
-// ── Clarification card (chip picker for ambiguous queries) ──────────────────
+// ── Alternatives block ──────────────────────────────────────────────────────
+// Rendered below an assistant statistic answer when the original query was
+// ambiguous. Each section lets the user re-run with a different interpretation.
+function AlternativesBlock({ alternatives, onPick }) {
+  if (!alternatives || alternatives.length === 0) return null;
+  return (
+    <div className={styles.alternativesWrap}>
+      {alternatives.map((alt, sectionIdx) => (
+        <div key={sectionIdx} className={styles.alternativesSection}>
+          <p className={styles.alternativesPrompt}>{alt.prompt}</p>
+          <div className={styles.alternativesOptions}>
+            {alt.options.map((opt, i) => (
+              <button
+                key={i}
+                type="button"
+                className={styles.alternativeChip}
+                onClick={() => onPick(opt)}
+              >
+                <span className={styles.alternativeChipLabel}>{opt.label}</span>
+                {opt.sublabel && (
+                  <span className={styles.alternativeChipSublabel}>{opt.sublabel}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Clarification card (legacy halt-style picker; kept for safety) ──────────
 function ClarificationCard({ data, onPick, picked }) {
   if (!data) return null;
   // Collapsed state — user already picked; show the choice as a small breadcrumb.
@@ -351,6 +382,7 @@ export default function ChatPage() {
           content: data.reply,
           methodology: data.methodology || null,
           caveats: data.caveats || null,
+          alternatives: Array.isArray(data.alternatives) ? data.alternatives : null,
         }]);
       }
     } catch {
@@ -359,6 +391,15 @@ export default function ChatPage() {
       setLoading(false);
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
+  }
+
+  // Click handler for an alternatives chip below a result. Hides the chips on
+  // the now-stale message and re-runs the lookup with the chip's pick metadata.
+  function handleAlternativePick(messageIndex, option) {
+    setMessages(prev => prev.map((m, i) =>
+      i === messageIndex ? { ...m, alternatives: null } : m
+    ));
+    sendMessage(option.value, option.meta || null);
   }
 
   // Click handler for clarification chips: collapse the card on the picked
@@ -504,6 +545,12 @@ export default function ChatPage() {
                             )
                           ) : (
                             msg.content
+                          )}
+                          {msg.role === "assistant" && !isTrendChart && !isClarification && msg.alternatives && msg.alternatives.length > 0 && (
+                            <AlternativesBlock
+                              alternatives={msg.alternatives}
+                              onPick={(opt) => handleAlternativePick(i, opt)}
+                            />
                           )}
                           {msg.role === "assistant" && !isTrendChart && !isClarification && (msg.methodology || msg.caveats) && (
                             <MoreInfo methodology={msg.methodology} caveats={msg.caveats} />

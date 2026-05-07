@@ -108,8 +108,8 @@
   justify-content: center;
   gap: 0.5rem;
   padding: 0.55rem clamp(1.05rem, 2.2vw, 1.5rem);
-  border-radius: 8px;
-  border: none;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
   font-family: inherit;
   font-size: 0.98rem;
   font-weight: 600;
@@ -119,8 +119,7 @@
   cursor: pointer;
   color: #fff;
   background: var(--accent);
-  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.18);
-  transition: background 0.18s ease, box-shadow 0.18s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
 }
 
 .ctaIcon {
@@ -129,20 +128,24 @@
 }
 
 .cta:hover:not(.ctaActive) {
-  background: #6d28d9;
+  background: #143664;
+  border-color: #143664;
 }
 
 :global(html[data-theme="dark"]) .cta:hover:not(.ctaActive) {
-  background: #9333ea;
+  background: #5b8ec5;
+  border-color: #5b8ec5;
 }
 
 .cta.ctaActive {
-  background: #6d28d9;
-  box-shadow: 0 0 0 2px var(--accent-glow);
+  background: var(--surface-2);
+  color: var(--accent);
+  border-color: var(--border);
 }
 
 :global(html[data-theme="dark"]) .cta.ctaActive {
-  background: #9333ea;
+  background: var(--surface-2);
+  color: var(--accent);
 }
 
 .main {

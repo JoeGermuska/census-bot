@@ -286,11 +286,11 @@
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: #6d28d9;
+  background: #143664;
 }
 
 :global(html[data-theme="dark"]) .btnPrimary:hover:not(:disabled) {
-  background: #9333ea;
+  background: #5b8ec5;
 }
 
 .btnPrimary:disabled {

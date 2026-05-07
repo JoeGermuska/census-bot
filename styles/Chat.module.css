@@ -11,8 +11,8 @@
   --c-text-dim: var(--text-dim);
   --c-muted: var(--muted);
   --c-accent: var(--accent);
-  --c-accent-soft: rgba(124, 58, 237, 0.08);
-  --c-accent-glow: rgba(124, 58, 237, 0.18);
+  --c-accent-soft: var(--badge-bg);
+  --c-accent-glow: var(--accent-glow);
   --c-bot-bg: var(--accent);
 
   display: flex;
@@ -28,8 +28,8 @@
 }
 
 :global(html[data-theme="dark"]) .chatPage {
-  --c-accent-soft: rgba(168, 85, 247, 0.10);
-  --c-accent-glow: rgba(168, 85, 247, 0.22);
+  --c-accent-soft: var(--badge-bg);
+  --c-accent-glow: var(--accent-glow);
 }
 
 /* ── Header ─────────────────────────────────────────────── */
@@ -276,7 +276,6 @@
 }
 
 .bubble {
-  max-width: 78%;
   padding: 1rem 1.2rem;
   border-radius: 16px;
   font-size: 0.92rem;
@@ -289,6 +288,11 @@
   border: 1px solid var(--c-border);
   color: var(--c-text);
   border-top-left-radius: 4px;
+  /* Assistant answers can be long (charts, methodology, alternatives) — give
+     them most of the column so content isn't squashed into a narrow strip. */
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 40px);
 }
 
 .bubbleUser {
@@ -296,6 +300,7 @@
   border: 1px solid var(--c-border);
   color: var(--c-text);
   border-top-right-radius: 4px;
+  max-width: 78%;
 }
 
 .bubbleError {
@@ -495,7 +500,7 @@
     max-height: calc(100vh - 15rem);
   }
 
-  .bubble {
+  .bubbleUser {
     max-width: 88%;
   }
 
@@ -556,9 +561,12 @@
   }
 
   .bubble {
-    max-width: 94%;
     padding: 0.75rem 0.9rem;
     font-size: 0.88rem;
+  }
+
+  .bubbleUser {
+    max-width: 94%;
   }
 
   .inputRow {
@@ -749,4 +757,69 @@
 .clarificationCollapsedCheck {
   color: var(--c-accent);
   font-weight: 700;
+}
+
+/* ── Alternatives block (best-guess + retry chips) ───────────────────────── */
+.alternativesWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed var(--c-border);
+}
+
+.alternativesSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.alternativesPrompt {
+  font-size: 0.78rem;
+  color: var(--c-text-dim);
+  margin: 0;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.alternativesOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.alternativeChip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.16s ease, background 0.16s ease;
+  font-family: inherit;
+  width: 100%;
+}
+
+.alternativeChip:hover {
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.alternativeChipLabel {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.alternativeChipSublabel {
+  font-size: 0.72rem;
+  color: var(--c-text-dim);
+  font-weight: 400;
+  line-height: 1.3;
 }
