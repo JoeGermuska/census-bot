@@ -6,7 +6,8 @@ import {
 } from "recharts";
 import styles from "../styles/Home.module.css";
 
-const SERIES_COLORS = ["#1a4480", "#2378c3", "#5b8ec5", "#7aa7d9", "#143664"];
+const SERIES_COLORS_LIGHT = ["#1a4480", "#2378c3", "#5b8ec5", "#7aa7d9", "#143664"];
+const SERIES_COLORS_DARK  = ["#60b4ff", "#89cfff", "#3d9be8", "#a8d8ff", "#2378c3"];
 
 function formatValueForMetric(rawValue, metric) {
   if (!Number.isFinite(rawValue)) return "N/A";
@@ -220,12 +221,23 @@ function pivotSeriesToRows(series) {
 // inline=true: render chart only (no card frame) for embedding inside a parent card
 export default function TrendChart({ data, expanded = false, inline = false }) {
   const [visible, setVisible] = useState(false);
+  const [isDark, setIsDark] = useState(false);
   const chartContainerRef = useRef(null);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setVisible(true));
     return () => cancelAnimationFrame(id);
   }, []);
+
+  useEffect(() => {
+    const update = () => setIsDark(document.documentElement.getAttribute("data-theme") === "dark");
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
+
+  const SERIES_COLORS = isDark ? SERIES_COLORS_DARK : SERIES_COLORS_LIGHT;
 
   if (!data) return null;
 
