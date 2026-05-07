@@ -485,7 +485,7 @@
   overflow: hidden;
   opacity: 0;
   animation: cardReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .statCard::before {
@@ -592,7 +592,7 @@
 .statSource {
   font-size: 0.72rem;
   color: var(--muted);
-  margin-top: 1.25rem;
+  margin-top: 1.75rem;
   letter-spacing: 0.03em;
   line-height: 1.5;
 }

@@ -95,7 +95,7 @@ export default function ExploreMetrics() {
       </Head>
       <SiteLayout>
         <div className={ex.wizardPage}>
-          <h1 className={ex.pageTitle}>Explore Data</h1>
+          <h1 className={ex.pageTitle}>Quick Lookup</h1>
 
           <div className={ex.progressBlock}>
             <div className={ex.progressRow}>

@@ -1,5 +1,6 @@
 // pages/explore/results.js — Step 3: run queries and display results
 import { useEffect, useMemo, useState } from "react";
+import { usePlaceGeoid } from "../../lib/usePlaceGeoid";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import SiteLayout from "../../components/SiteLayout";
@@ -11,6 +12,7 @@ import {
   EXPLORE_LOCATION_STORAGE_KEY,
   buildCityStateQuery,
   CURRENT_ACS_YEAR,
+  buildCensusProfileUrl,
 } from "../../lib/censusConstants";
 
 // Plain-English bottom-line summary for a trend result
@@ -54,6 +56,21 @@ function getMetricMeta(metricLabel) {
   if (l.includes("commute") || l.includes("travel")) return { color, icon: "🚇" };
   if (l.includes("bachelor") || l.includes("education")) return { color, icon: "🎓" };
   return { color, icon: "📌" };
+}
+
+function SourceFooter({ source, metric, city, stateName }) {
+  const geoid = usePlaceGeoid(city, stateName);
+  return (
+    <a
+      href={buildCensusProfileUrl(city, stateName, metric, geoid)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={ex.statSource}
+      style={{ textDecoration: "underline", textUnderlineOffset: 2 }}
+    >
+      {source}
+    </a>
+  );
 }
 
 function CardSpinner() {
@@ -234,7 +251,7 @@ export default function ExploreResults() {
       </Head>
       <SiteLayout>
         <div className={ex.wizardPage}>
-          <h1 className={ex.pageTitle}>Explore Data</h1>
+          <h1 className={ex.pageTitle}>Quick Lookup</h1>
 
           <div className={ex.progressBlock}>
             <div className={ex.progressRow}>
@@ -399,7 +416,12 @@ export default function ExploreResults() {
                       )}
 
                       {/* Source */}
-                      <div className={ex.statSource}>{result.source}</div>
+                      <SourceFooter
+                        source={result.source}
+                        metric={result.metric}
+                        city={city}
+                        stateName={stateName}
+                      />
                     </div>
                   );
                 })}

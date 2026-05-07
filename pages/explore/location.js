@@ -255,7 +255,7 @@ export default function ExploreLocation() {
       </Head>
       <SiteLayout>
         <div className={ex.wizardPage}>
-          <h1 className={ex.pageTitle}>Explore Data</h1>
+          <h1 className={ex.pageTitle}>Quick Lookup</h1>
 
           <div className={ex.progressBlock}>
             <div className={ex.progressRow}>
@@ -304,11 +304,6 @@ export default function ExploreLocation() {
               {placesError && (
                 <p className={ex.hint} style={{ color: "var(--error)", marginTop: 6 }}>
                   {placesError}
-                </p>
-              )}
-              {!placesError && stateName && !placesLoading && places.length > 0 && (
-                <p className={ex.hint} style={{ marginTop: 6, opacity: 0.7 }}>
-                  {places.length} places available — type any name to search.
                 </p>
               )}
             </div>

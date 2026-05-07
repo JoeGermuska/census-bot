@@ -5,8 +5,11 @@ import {
   Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import styles from "../styles/Home.module.css";
+import { buildCensusProfileUrl } from "../lib/censusConstants";
+import { usePlaceGeoid } from "../lib/usePlaceGeoid";
 
-const SERIES_COLORS = ["#1a4480", "#2378c3", "#5b8ec5", "#7aa7d9", "#143664"];
+const SERIES_COLORS_LIGHT = ["#1a4480", "#2378c3", "#5b8ec5", "#7aa7d9", "#143664"];
+const SERIES_COLORS_DARK  = ["#60b4ff", "#89cfff", "#3d9be8", "#a8d8ff", "#2378c3"];
 
 function formatValueForMetric(rawValue, metric) {
   if (!Number.isFinite(rawValue)) return "N/A";
@@ -220,6 +223,7 @@ function pivotSeriesToRows(series) {
 // inline=true: render chart only (no card frame) for embedding inside a parent card
 export default function TrendChart({ data, expanded = false, inline = false }) {
   const [visible, setVisible] = useState(false);
+  const [isDark, setIsDark] = useState(false);
   const chartContainerRef = useRef(null);
 
   useEffect(() => {
@@ -227,9 +231,23 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  if (!data) return null;
+  useEffect(() => {
+    const update = () => setIsDark(document.documentElement.getAttribute("data-theme") === "dark");
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
-  const { metric, location, source } = data;
+  const SERIES_COLORS = isDark ? SERIES_COLORS_DARK : SERIES_COLORS_LIGHT;
+
+  const { metric, location, source } = data || {};
+  const locationComma = (location || "").indexOf(",");
+  const locationCity  = locationComma > -1 ? location.slice(0, locationComma).trim() : location || "";
+  const locationState = locationComma > -1 ? location.slice(locationComma + 1).trim() : "";
+  const geoid = usePlaceGeoid(locationCity, locationState);
+
+  if (!data) return null;
   const series = normalizeSeries(data);
   const rows = pivotSeriesToRows(series);
   const isMulti = series.length > 1;
@@ -334,7 +352,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
           No trend data available.
         </div>
       ) : (
-        <div ref={chartContainerRef}>
+        <div ref={chartContainerRef} style={{ height: chartHeight, overflow: "hidden" }}>
           <ResponsiveContainer width="100%" height={chartHeight}>
             <AreaChart data={rows} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
               <defs>
@@ -379,7 +397,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
                 }}
               />
 
-              <Tooltip content={<CustomTooltip metric={metric} />} />
+              <Tooltip content={<CustomTooltip metric={metric} />} isAnimationActive={false} />
               {isMulti && (
                 <Legend
                   wrapperStyle={{ fontSize: 11, paddingTop: 12, color: "var(--chart-muted)" }}
@@ -420,8 +438,18 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
           display: "flex", alignItems: "center", justifyContent: "space-between",
           flexWrap: "wrap", gap: "0.5rem",
         }}>
-          <span style={{ color: "var(--chart-source)", fontSize: 11 }}>
-            {source}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <a
+              href={buildCensusProfileUrl(locationCity, locationState, metric, geoid)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: "var(--chart-source)", fontSize: 11,
+                textDecoration: "underline", textUnderlineOffset: 2,
+              }}
+            >
+              {source}
+            </a>
             <ACSTooltip />
           </span>
           {rows.length > 0 && (

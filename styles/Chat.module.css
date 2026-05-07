@@ -139,38 +139,12 @@
   line-height: 1.4;
 }
 
-/* ── Mode badge ─────────────────────────────────────────── */
-.modeBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.3rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid var(--c-border);
-  background: var(--c-surface);
-  color: var(--c-text-dim);
-  font-size: 0.75rem;
-  font-weight: 600;
-  margin-bottom: 0.4rem;
-  flex-shrink: 0;
-  width: fit-content;
-}
-
-/* ── Limit notice ───────────────────────────────────────── */
-.limitNotice {
-  font-size: 0.78rem;
-  color: var(--c-muted);
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: 8px;
-  padding: 0.5rem 0.9rem;
-  margin-bottom: 0.5rem;
-  flex-shrink: 0;
-  line-height: 1.5;
-}
-
-.limitNotice strong {
-  color: var(--c-text-dim);
+/* ── Mode inline label (in header title) ─────────────────── */
+.modeInlineLabel {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--c-accent);
+  letter-spacing: -0.01em;
 }
 
 /* ── Message list ────────────────────────────────────────── */
@@ -189,15 +163,9 @@
   scrollbar-color: var(--c-border) transparent;
 }
 
-/* ── Empty state ─────────────────────────────────────────── */
+/* ── Empty state — pure flex spacer, pushes input to bottom ─ */
 .emptyState {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5rem;
-  padding: 2rem 0 3rem;
 }
 
 .emptyIcon {
@@ -217,12 +185,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
-  justify-content: center;
-  max-width: 520px;
+  justify-content: flex-start;
+  margin-bottom: 0.75rem;
 }
 
 .suggestion {
-  padding: 0.5rem 1rem;
+  padding: 0.65rem 1.2rem;
   border-radius: 999px;
   border: 1px solid var(--c-border);
   background: var(--c-surface);
@@ -318,7 +286,8 @@
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
-  padding: 0.1rem 0;
+  padding: 0.28rem 0;
+  line-height: 1.7;
 }
 
 .bullet {
@@ -474,6 +443,25 @@
 
 .limitReached strong {
   color: var(--c-text);
+}
+
+/* ── chatInner ───────────────────────────────────────────── */
+.chatInner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Message counter ─────────────────────────────────────── */
+.msgCounter {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: right;
+  margin-bottom: 0.4rem;
 }
 
 /* ── Input area ──────────────────────────────────────────── */

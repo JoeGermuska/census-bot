@@ -31,3 +31,4 @@ yarn-error.log*
 # vercel
 .vercel
 .claude/worktrees/
+.claude/settings.local.json
