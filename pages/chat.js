@@ -6,6 +6,7 @@ import TrendChart from "../components/TrendChart";
 import ChatInputBox from "../components/ChatInputBox";
 import styles from "../styles/Chat.module.css";
 import { buildCensusProfileUrl } from "../lib/censusConstants";
+import { usePlaceGeoid } from "../lib/usePlaceGeoid";
 
 const MAX_EXCHANGES = 10;
 
@@ -195,9 +196,10 @@ function SourceFooter({ source, metric, place }) {
   const commaIdx = (place || "").indexOf(",");
   const city  = commaIdx > -1 ? place.slice(0, commaIdx).trim() : place || "";
   const state = commaIdx > -1 ? place.slice(commaIdx + 1).trim() : "";
+  const geoid = usePlaceGeoid(city, state);
   return (
     <a
-      href={buildCensusProfileUrl(city, state, metric)}
+      href={buildCensusProfileUrl(city, state, metric, geoid)}
       target="_blank"
       rel="noopener noreferrer"
       className={styles.statCardSource}
@@ -533,14 +535,17 @@ export default function ChatPage() {
           {/* Header */}
           <div className={styles.header}>
             <div className={styles.headerLeft}>
-              <h1 className={styles.title}>Ask a Question</h1>
+              <h1 className={styles.title}>
+                Ask a Question
+                {activeMode && <span className={styles.modeInlineLabel}> — {activeMode.label}</span>}
+              </h1>
               <p className={styles.subtitle}>
                 {activeMode ? activeMode.description : "Choose how you want to explore Census data."}
               </p>
             </div>
             {(mode !== null) && (
               <button type="button" className={styles.clearBtn} onClick={clearChat}>
-                ← Start over
+                ← New Chat
               </button>
             )}
           </div>
@@ -565,30 +570,10 @@ export default function ChatPage() {
               </div>
             </div>
           ) : (
-            <>
-              {/* Active mode badge */}
-              <div className={styles.modeBadge}>
-                <span>{activeMode.icon}</span>
-                <span>{activeMode.label}</span>
-              </div>
-
-              {/* Limit notice */}
-              <div className={styles.limitNotice}>
-                Conversations limited to 10 exchanges. Click <strong>Start over</strong> to reset.
-              </div>
-
-              {/* Message list / suggestions */}
+            <div className={styles.chatInner}>
+              {/* Message list — or spacer when empty */}
               {messages.length === 0 && !loading ? (
-                <div className={styles.emptyState}>
-                  <p className={styles.emptyText}>{activeMode.description}</p>
-                  <div className={styles.suggestions}>
-                    {activeMode.suggestions.map(s => (
-                      <button key={s} type="button" className={styles.suggestion} onClick={() => sendMessage(s)}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <div className={styles.emptyState} />
               ) : (
                 <div className={styles.messageList} ref={listRef}>
                   {messages.map((msg, i) => {
@@ -677,9 +662,19 @@ export default function ChatPage() {
 
               {/* Input area */}
               <div className={styles.inputArea}>
+                {/* Suggestions — shown only when no messages yet */}
+                {messages.length === 0 && !loading && (
+                  <div className={styles.suggestions}>
+                    {activeMode.suggestions.map(s => (
+                      <button key={s} type="button" className={styles.suggestion} onClick={() => sendMessage(s)}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {atLimit ? (
                   <div className={styles.limitReached}>
-                    Conversation limit reached. Click <strong>Start over</strong> to begin a new chat.
+                    Conversation limit reached. Click <strong>New Chat</strong> to begin a new chat.
                   </div>
                 ) : (
                   <ChatInputBox
@@ -692,8 +687,9 @@ export default function ChatPage() {
                     placeholder={activeMode.placeholder}
                   />
                 )}
+                <div className={styles.msgCounter}>{Math.floor(messages.length / 2)} / {MAX_EXCHANGES} messages used</div>
               </div>
-            </>
+            </div>
           )}
         </div>
       </SiteLayout>

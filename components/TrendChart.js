@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import styles from "../styles/Home.module.css";
 import { buildCensusProfileUrl } from "../lib/censusConstants";
+import { usePlaceGeoid } from "../lib/usePlaceGeoid";
 
 const SERIES_COLORS_LIGHT = ["#1a4480", "#2378c3", "#5b8ec5", "#7aa7d9", "#143664"];
 const SERIES_COLORS_DARK  = ["#60b4ff", "#89cfff", "#3d9be8", "#a8d8ff", "#2378c3"];
@@ -240,9 +241,13 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
 
   const SERIES_COLORS = isDark ? SERIES_COLORS_DARK : SERIES_COLORS_LIGHT;
 
-  if (!data) return null;
+  const { metric, location, source } = data || {};
+  const locationComma = (location || "").indexOf(",");
+  const locationCity  = locationComma > -1 ? location.slice(0, locationComma).trim() : location || "";
+  const locationState = locationComma > -1 ? location.slice(locationComma + 1).trim() : "";
+  const geoid = usePlaceGeoid(locationCity, locationState);
 
-  const { metric, location, source } = data;
+  if (!data) return null;
   const series = normalizeSeries(data);
   const rows = pivotSeriesToRows(series);
   const isMulti = series.length > 1;
@@ -435,12 +440,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
         }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <a
-              href={(() => {
-                const ci = (location || "").indexOf(",");
-                const city  = ci > -1 ? location.slice(0, ci).trim() : location || "";
-                const state = ci > -1 ? location.slice(ci + 1).trim() : "";
-                return buildCensusProfileUrl(city, state, metric);
-              })()}
+              href={buildCensusProfileUrl(locationCity, locationState, metric, geoid)}
               target="_blank"
               rel="noopener noreferrer"
               style={{

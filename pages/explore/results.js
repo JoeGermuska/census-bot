@@ -1,5 +1,6 @@
 // pages/explore/results.js — Step 3: run queries and display results
 import { useEffect, useMemo, useState } from "react";
+import { usePlaceGeoid } from "../../lib/usePlaceGeoid";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import SiteLayout from "../../components/SiteLayout";
@@ -58,9 +59,10 @@ function getMetricMeta(metricLabel) {
 }
 
 function SourceFooter({ source, metric, city, stateName }) {
+  const geoid = usePlaceGeoid(city, stateName);
   return (
     <a
-      href={buildCensusProfileUrl(city, stateName, metric)}
+      href={buildCensusProfileUrl(city, stateName, metric, geoid)}
       target="_blank"
       rel="noopener noreferrer"
       className={ex.statSource}
