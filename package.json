@@ -9,16 +9,19 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.90.0",
+    "@anthropic-ai/sdk": "^0.94.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.14.0",
-    "next": "14.2.3",
+    "next": "^16.2.4",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^2.12.7"
   },
+  "overrides": {
+    "postcss": "^8.5.14"
+  },
   "devDependencies": {
-    "eslint": "^8",
-    "eslint-config-next": "14.2.3"
+    "eslint": "^9",
+    "eslint-config-next": "^16.2.4"
   }
 }
