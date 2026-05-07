@@ -836,6 +836,101 @@
   border-bottom-color: var(--c-accent);
 }
 
+/* ── Methodology & caveats panel inside the stat card ────────────────────── */
+.statCardMethWrap {
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px dashed var(--c-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.statCardMethBtn {
+  align-self: flex-start;
+  padding: 0.32rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--c-border);
+  background: transparent;
+  color: var(--c-text-dim);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.statCardMethBtn:hover {
+  color: var(--c-accent);
+  border-color: var(--c-accent);
+  background: var(--c-accent-soft);
+}
+
+.statCardMethBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+
+.statCardNuanceList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.statCardNuanceItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  color: var(--c-text-dim);
+}
+
+.statCardNuanceMark {
+  flex-shrink: 0;
+  color: var(--c-accent);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.statCardMethPassage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+}
+
+.statCardMethText {
+  margin: 0;
+  color: var(--c-text);
+  font-style: italic;
+}
+
+.statCardMethCite {
+  align-self: flex-start;
+  color: var(--c-muted);
+  font-size: 0.76rem;
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+a.statCardMethCite:hover {
+  color: var(--c-accent);
+  border-bottom-color: var(--c-accent);
+}
+
 /* ── Alternatives block (best-guess + retry chips) ───────────────────────── */
 .alternativesWrap {
   display: flex;
@@ -899,4 +994,54 @@
   color: var(--c-text-dim);
   font-weight: 400;
   line-height: 1.3;
+}
+
+/* ── Sources block (RAG citations from search_acs_docs) ───────────────────── */
+.sourcesBlock {
+  margin-top: 0.85rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--c-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.sourcesLabel {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  margin-bottom: 0.15rem;
+}
+
+.sourceLine {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.sourceIndex {
+  color: var(--c-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.sourceLink {
+  color: var(--c-accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+
+.sourceLink:hover {
+  border-bottom-color: currentColor;
+}
+
+.sourcePage {
+  color: var(--c-muted);
+  font-weight: 400;
 }

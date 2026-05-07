@@ -3,12 +3,14 @@
 // ANTHROPIC_API_KEY is read from .env.local — never exposed to the browser.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { parseQuery, formatValue, detectAmbiguousMetric, STATE_FIPS } from "../../lib/censusTranslator";
+import { parseQuery, parseVariableOnly, formatValue, detectAmbiguousMetric, STATE_FIPS } from "../../lib/censusTranslator";
 import { fetchCensusValue, fetchCensusValueWithFallback } from "../../lib/censusApi";
 import { QUERY_TYPES, CURRENT_ACS_YEAR } from "../../lib/censusConstants";
 import { computeRateIfNeeded, getRateDenominator } from "../../lib/censusRates";
 import { validateValue } from "../../lib/validateCensusData";
 import { findGeoCandidates, findZctaByZip, extractGeoPhrase, describeCandidate, geoParamsFromCandidate, candidateLabel } from "../../lib/geoCandidates";
+import { searchAcsDocs } from "../../lib/acsRag";
+import { buildNuanceBanners, buildMethodologyQuery } from "../../lib/acsNuances";
 import fs from "fs";
 import path from "path";
 
@@ -135,6 +137,34 @@ const TREND_TOOL = {
   },
 };
 
+// RAG search over the indexed ACS source documents. Used when the user asks
+// about ACS concepts, methodology, definitions, MOEs, table contents, etc.
+const ACS_DOCS_TOOL = {
+  name: "search_acs_docs",
+  description:
+    "Search the indexed corpus of official ACS documentation (Census Bureau handbooks, " +
+    "the Design and Methodology Report, the Subject Definitions, and the 'Why we ask " +
+    "each question' topic pages). Use this whenever the user asks ABOUT the ACS itself " +
+    "— what a concept means, how a number is computed, how MOEs work, what a table " +
+    "covers, what counts as a household, why the survey asks a given question, " +
+    "differences between 1-year and 5-year estimates, etc. Do NOT use it for fetching " +
+    "specific numbers about a place — use lookup_census_data or get_census_trend for that.",
+  input_schema: {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Natural-language search query — what to look up in the docs.",
+      },
+      top_k: {
+        type: "number",
+        description: "Max passages to return. Defaults to 5; cap at 8.",
+      },
+    },
+    required: ["query"],
+  },
+};
+
 const TREND_ROUTE_KEYWORDS = [
   "trend",
   "over time",
@@ -192,6 +222,28 @@ If no tool data is available:
   {"type":"error","message":"Unable to generate chart data."}
 - For non-chart requests, respond:
   "I don’t have time-series Census access for that request yet."
+
+DOCUMENTATION QUESTIONS (concepts, methodology, definitions):
+When the user asks about WHAT something means, HOW the ACS measures it, MOEs,
+1-year vs 5-year differences, what a table covers, who is included in a
+universe, etc. — call search_acs_docs FIRST, then answer using the returned
+passages.
+
+When citing search_acs_docs results, do this exactly:
+- Weave numbered markers like [1], [2] into prose right after the claim they support.
+- The numbers MUST match the 'index' field on each passage you used.
+- After your prose, on a new line, write the literal token "Sources:" followed
+  by one line per cited source in this exact format:
+    [N] <chunk_id>
+  where chunk_id is the 'chunk_id' field from the tool result. Example:
+    Sources:
+    [1] subject-definitions__p41__0
+    [2] handbook-general__p18__2
+- Do NOT include the doc title or page number on the Sources lines — the UI
+  resolves those from chunk_id. Just "[N] chunk_id".
+- Only cite passages you actually used. Don't pad with unused results.
+- If search_acs_docs returns an error or zero passages, answer from general
+  knowledge without citations and don't fabricate a Sources block.
 
 Formatting rules (strictly follow these):
 - This is a chat UI. Never use --- dividers, ## headers, or ### headers.
@@ -263,6 +315,40 @@ function buildSystemPrompt(userMessage, mode, forceTrendRouting = false) {
   }
 
   return prompt;
+}
+
+// Run the ACS documentation search tool. Returns either a passages array or
+// an error object — both are valid Claude tool_result payloads.
+async function runAcsDocsTool(toolInput) {
+  const query = typeof toolInput?.query === "string" ? toolInput.query.trim() : "";
+  const topK = Number.isFinite(toolInput?.top_k)
+    ? Math.min(8, Math.max(1, toolInput.top_k))
+    : 5;
+  if (!query) return { error: "search_acs_docs: missing 'query'." };
+  try {
+    const { results } = await searchAcsDocs(query, { topK });
+    if (results.length === 0) {
+      return { passages: [], note: "No matching passages found in the indexed ACS docs." };
+    }
+    // Return a compact form Claude can cite. Truncate text to keep tool_result tokens reasonable.
+    return {
+      passages: results.map((r, i) => ({
+        index: i + 1, // 1-based — matches the [N] citation form
+        chunk_id: r.chunk_id,
+        doc_title: r.doc_title,
+        doc_kind: r.doc_kind,
+        page: r.page,
+        text: r.text.length > 1200 ? r.text.slice(0, 1200) + "…" : r.text,
+        score: Number(r.score.toFixed(3)),
+      })),
+    };
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (/index not found/i.test(msg)) {
+      return { error: "ACS docs index has not been built yet. Answer from general knowledge without citations." };
+    }
+    return { error: `search_acs_docs failed: ${msg}` };
+  }
 }
 
 async function runCensusTool(toolInput) {
@@ -445,6 +531,100 @@ function datasetPath(dataset) {
   return dataset === "acs1" ? "acs/acs1" : "acs/acs5";
 }
 
+// Minimum BM25 score for a RAG passage to be considered "good enough" to
+// surface as the variable's methodology citation. Below this, we skip rather
+// than include a weak match that would confuse the user.
+const RAG_METHODOLOGY_MIN_SCORE = 1.0;
+const RAG_METHODOLOGY_MAX_CHARS = 600;
+
+// Truncate at a sentence boundary near the budget so the snippet doesn't
+// end mid-thought.
+function truncateAtSentence(text, maxChars) {
+  const s = String(text || "");
+  if (s.length <= maxChars) return s;
+  const window = s.slice(0, maxChars);
+  const lastDot = window.lastIndexOf(". ");
+  if (lastDot > maxChars * 0.6) return window.slice(0, lastDot + 1);
+  return window.replace(/\s+\S*$/, "") + "…";
+}
+
+// Augment a structured stat payload with deterministic nuance banners and
+// (best-effort) a RAG-fetched methodology passage. Mutates and returns
+// `structured` for convenience. Never throws — RAG failures degrade silently.
+async function attachNuancesAndMethodology(structured, variableId) {
+  if (!structured) return structured;
+  // Make sure the raw variableId is present so banner rules can read it.
+  if (variableId && !structured.variableId) structured.variableId = variableId;
+
+  structured.nuances = buildNuanceBanners(structured);
+
+  try {
+    const query = buildMethodologyQuery(variableId, structured.variable);
+    const { results } = await searchAcsDocs(query, { topK: 1 });
+    const top = results?.[0];
+    if (top && top.score >= RAG_METHODOLOGY_MIN_SCORE) {
+      structured.methodology = {
+        text: truncateAtSentence(top.text, RAG_METHODOLOGY_MAX_CHARS),
+        doc_title: top.doc_title,
+        doc_url: top.doc_url,
+        page: top.page,
+        chunk_id: top.chunk_id,
+      };
+    }
+  } catch {
+    // RAG miss → no methodology block, banners still render.
+  }
+
+  return structured;
+}
+
+// True when the user's geo phrase looks like a "zip NNNNN" reference
+// (so we should give a ZIP-specific message rather than the general one).
+function isZipQuirk(geoPhrase) {
+  if (!geoPhrase?.name) return false;
+  return /^(zip|zcta)\s+\d{5}$/i.test(geoPhrase.name.trim()) ||
+         /^\d{5}$/.test(geoPhrase.name.trim());
+}
+
+// Friendly prompt shown when a user's location doesn't match any ACS geography.
+function buildAcsQuirkPrompt(geoPhrase) {
+  if (isZipQuirk(geoPhrase)) {
+    const zip = (geoPhrase.name.match(/\d{5}/) || [])[0] || geoPhrase.name;
+    return [
+      `**ZIP ${zip}** isn't published as a ZCTA in ACS data.`,
+      ``,
+      `This usually happens for ZIPs that are single-organization codes (P.O. boxes or company-internal mail like GE's 12345 in Schenectady). The Census Bureau only tabulates residential ZCTAs.`,
+      ``,
+      `Try a residential ZIP nearby, or use the city or county name instead.`,
+    ].join("\n");
+  }
+  const where = geoPhrase.state ? `${geoPhrase.name}, ${geoPhrase.state}` : geoPhrase.name;
+  const stateClause = geoPhrase.state || "<state>";
+  return [
+    `I couldn't find ACS data for **"${where}"**.`,
+    ``,
+    `The Census Bureau publishes ACS data for:`,
+    `- Cities or towns — try **"${geoPhrase.name}, ${stateClause}"**`,
+    `- Counties — try **"${geoPhrase.name} County, ${stateClause}"**`,
+    `- Metro areas — try **"${geoPhrase.name} metro"**`,
+    `- ZIP codes — try **"in zip 12345"**`,
+    `- States — try just the state name`,
+    ``,
+    `Reword your question with one of those formats and I'll try again.`,
+  ].join("\n");
+}
+
+// Prompt shown when the user mentioned a place ACS knows but a metric ACS doesn't.
+function buildMetricNotRecognizedPrompt() {
+  return [
+    `I couldn't tell which ACS metric you're asking about.`,
+    ``,
+    `Supported metrics: population, median household income, per capita income, median family income, median rent, median home value, total housing units, median age, mean travel time, poverty rate, unemployment rate, employment rate, labor force participation, bachelor's degree, high school graduation rate, graduate degree.`,
+    ``,
+    `Try rephrasing with one of those.`,
+  ].join("\n");
+}
+
 async function verifySentence(numericValue, sentence) {
   try {
     const response = await client.messages.create({
@@ -472,7 +652,9 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
     return { error: "Server configuration error: missing Census API key." };
   }
 
-  // Resolve the metric: prefer pickedMetric, else parse from userMsg
+  // Resolve the metric: prefer pickedMetric, else parse from userMsg.
+  // Use parseVariableOnly so we don't reject the message just because the
+  // geo phrase isn't a city/state (e.g. ZCTA queries: "in zip 90210").
   let variable;
   if (pickedMetric?.variableId && pickedMetric?.label && pickedMetric?.format) {
     variable = {
@@ -481,9 +663,9 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
       format: pickedMetric.format,
     };
   } else {
-    const parsed = parseQuery(userMsg);
-    if (parsed.error || !parsed.variable) return null; // fall through to fast path
-    variable = parsed.variable;
+    const v = parseVariableOnly(userMsg);
+    if (!v) return null; // no recognizable metric — fall through
+    variable = v;
   }
 
   // Resolve the geo: prefer pickedGeo, else fall through
@@ -563,6 +745,10 @@ function sameCandidate(a, b) {
   }
 }
 
+// County-style suffixes that the user might type but that aren't part of
+// the bare county name in Census data (e.g. "Cook County" → "Cook").
+const COUNTY_LIKE_SUFFIX_RE = /\s+(county|parish|census area)$/i;
+
 // Detect ambiguity in the query without halting — returns defaults + raw data so
 // the caller can both run the best-guess lookup AND surface the other interpretations
 // as clickable alternatives.
@@ -584,26 +770,60 @@ async function detectAlternatives(userMsg, { skipMetricCheck = false } = {}) {
     };
   }
 
-  const geo = extractGeoPhrase(userMsg);
-  if (geo?.name) {
-    const lowerName = geo.name.toLowerCase();
-    if (!(geo.state == null && STATE_FIPS[lowerName])) {
-      let candidates = null;
-      try {
-        candidates = await findGeoCandidates(geo.name, { stateName: geo.state || null });
-      } catch {
-        candidates = null;
-      }
-      if (candidates && candidates.length > 1) {
-        out.geo = {
-          name: geo.name,
-          stateName: geo.state,
-          candidates,
-          types: new Set(candidates.map((c) => c.geoType)),
-          defaultGeo: candidates[0],
-        };
-      }
+  // ── ZCTA shortcut: user gave a 5-digit ZIP with a zip/zcta keyword ──
+  const zipMatch = String(userMsg || "").match(/\b(\d{5})\b/);
+  if (zipMatch && /\b(zip|zcta)\b/i.test(userMsg)) {
+    const zcta = await findZctaByZip(zipMatch[1]).catch(() => null);
+    if (zcta) {
+      out.geo = {
+        name: zipMatch[1],
+        stateName: null,
+        candidates: [zcta],
+        types: new Set(["zcta"]),
+        defaultGeo: zcta,
+      };
+      return out;
     }
+  }
+
+  const geo = extractGeoPhrase(userMsg);
+  if (!geo?.name) return out;
+
+  const lowerName = geo.name.toLowerCase();
+  // State-only query → handled by parseQuery directly, no candidates needed
+  if (geo.state == null && STATE_FIPS[lowerName]) return out;
+
+  // Try the literal name first; if that misses AND the name has a county-like
+  // suffix ("Cook County"), retry with the suffix stripped so we hit the
+  // county fetcher's bare names.
+  let candidates = await findGeoCandidates(geo.name, { stateName: geo.state || null }).catch(() => null);
+  let userTypedCountySuffix = false;
+  if (COUNTY_LIKE_SUFFIX_RE.test(geo.name)) {
+    userTypedCountySuffix = true;
+    if (!candidates || candidates.length === 0) {
+      const stripped = geo.name.replace(COUNTY_LIKE_SUFFIX_RE, "").trim();
+      candidates = await findGeoCandidates(stripped, { stateName: geo.state || null }).catch(() => null);
+    }
+  }
+
+  // Use any candidates we found — even a single one. parseQuery's place_filter
+  // path doesn't catch CDPs whose Census name has a prefix (e.g. "Urban Honolulu"),
+  // so preferring geoCandidates whenever it returns ≥1 hit makes more queries land.
+  if (candidates && candidates.length > 0) {
+    // When the user explicitly typed "X County", prefer the county candidate
+    // over any same-name place (Maricopa County, AZ vs. Maricopa city, AZ).
+    let defaultGeo = candidates[0];
+    if (userTypedCountySuffix) {
+      const county = candidates.find((c) => c.geoType === "county");
+      if (county) defaultGeo = county;
+    }
+    out.geo = {
+      name: geo.name,
+      stateName: geo.state,
+      candidates,
+      types: new Set(candidates.map((c) => c.geoType)),
+      defaultGeo,
+    };
   }
 
   return out;
@@ -701,6 +921,18 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
   }
   const altsField = alternatives.length > 0 ? { alternatives } : {};
 
+  // Up-front metric check: if no metric can be resolved (no pick, no ambiguity
+  // default, no VARIABLE_MAP match), surface a metric-not-recognized prompt
+  // instead of falling through to a geo-quirk message that points at the wrong
+  // problem (or to the agentic loop, which can hallucinate).
+  const metricResolved = !!(activeMetric || parseVariableOnly(userMsg));
+  if (!metricResolved) {
+    return res.status(200).json({
+      reply: buildMetricNotRecognizedPrompt(),
+      ...altsField,
+    });
+  }
+
   // Path 1: trend routing — runs first when the user explicitly wants a time-series.
   // Only fires when parseQuery resolves the geo (otherwise we can't query the trend API).
   if (needsTrendRouting(userMsg)) {
@@ -746,6 +978,15 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
   if (activeGeo) {
     const result = await performPickedLookup({ pickedGeo: activeGeo, pickedMetric: activeMetric, userMsg });
     if (result?.reply) {
+      // Surface population from the picked candidate so banners can tailor
+      // the small-place 5-year wording.
+      if (result.structured && typeof activeGeo.population === "number") {
+        result.structured.population = activeGeo.population;
+      }
+      const variableId = result.structured?.variableId
+        || activeMetric?.variableId
+        || parseVariableOnly(userMsg)?.id;
+      await attachNuancesAndMethodology(result.structured, variableId);
       return res.status(200).json({ ...result, ...altsField });
     }
     if (result?.error) {
@@ -756,7 +997,20 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
 
   // Path 3: standard parseQuery → fetch.
   const parsed = parseQuery(userMsg);
-  if (parsed.error) return null; // fall through to agentic loop for fuzzy queries
+  if (parsed.error) {
+    // If the user mentioned an "in <name>" but neither parseQuery nor the
+    // geoCandidates search resolved it, that's an ACS-quirk case — give a
+    // helpful prompt instead of falling through to the agentic loop (which
+    // can hallucinate without a real lookup).
+    const geoPhrase = extractGeoPhrase(userMsg);
+    if (geoPhrase?.name) {
+      return res.status(200).json({
+        reply: buildAcsQuirkPrompt(geoPhrase, userMsg),
+        ...altsField,
+      });
+    }
+    return null; // truly off-topic — let the agentic loop respond
+  }
 
   // If user picked a metric, override parseQuery's variable.
   const variable = activeMetric
@@ -770,7 +1024,19 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
       year: CURRENT_ACS_YEAR,
     });
   } catch (err) {
-    return res.status(200).json({ reply: null, error: String(err?.message || "Failed to fetch Census data."), warning: true });
+    const errMsg = String(err?.message || "Failed to fetch Census data.");
+    // "Couldn't find X in Census place data" means the user-typed place name
+    // didn't match anything in ACS. Show the quirk prompt instead of a raw error.
+    if (/Couldn't find/i.test(errMsg)) {
+      const geoPhrase = extractGeoPhrase(userMsg);
+      if (geoPhrase?.name) {
+        return res.status(200).json({
+          reply: buildAcsQuirkPrompt(geoPhrase, userMsg),
+          ...altsField,
+        });
+      }
+    }
+    return res.status(200).json({ reply: null, error: errMsg, warning: true });
   }
 
   let rawValue = fetchResult.value;
@@ -827,18 +1093,21 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
     }
   }
 
+  const structured = {
+    value: numericValue,
+    variable: variable.label,
+    place: locationLabel,
+    year: Number(CURRENT_ACS_YEAR),
+    unit: format,
+    dataset,
+    source: buildSourceLabel(dataset, CURRENT_ACS_YEAR),
+    tables: buildSourceTables(variable.id),
+  };
+  await attachNuancesAndMethodology(structured, variable.id);
+
   return res.status(200).json({
     reply: sentence,
-    structured: {
-      value: numericValue,
-      variable: variable.label,
-      place: locationLabel,
-      year: Number(CURRENT_ACS_YEAR),
-      unit: format,
-      dataset,
-      source: buildSourceLabel(dataset, CURRENT_ACS_YEAR),
-      tables: buildSourceTables(variable.id),
-    },
+    structured,
     warnings,
     validated: !validationFailed,
     ...altsField,
@@ -898,7 +1167,7 @@ export default async function handler(req, res) {
         model: MODEL,
         max_tokens: MAX_TOKENS,
         system: systemPrompt,
-        tools: [CENSUS_TOOL, TREND_TOOL],
+        tools: [CENSUS_TOOL, TREND_TOOL, ACS_DOCS_TOOL],
         messages: currentMessages,
       });
 
@@ -945,6 +1214,8 @@ export default async function handler(req, res) {
               }
             } else if (block.name === CENSUS_TOOL.name) {
               result = await runCensusTool(block.input);
+            } else if (block.name === ACS_DOCS_TOOL.name) {
+              result = await runAcsDocsTool(block.input);
             } else {
               result = { error: `Unsupported tool: ${block.name}` };
             }

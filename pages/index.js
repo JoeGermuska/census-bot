@@ -77,7 +77,7 @@ export default function Home() {
                 </div>
               </Link>
 
-              <Link className={landing.secondary} href="/about">
+              <Link className={landing.secondary} href="/learn">
                 <div className={landing.secondaryRow}>
                   <div>
                     <div className={landing.secondaryTitle}>Learn more about ACS data</div>

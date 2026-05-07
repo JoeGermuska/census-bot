@@ -193,11 +193,16 @@ function formatStatValue(raw, unit) {
 // Rendered inside the assistant bubble whenever the response carries a
 // `structured` payload from the deterministic fast path.
 function StatCard({ structured }) {
+  const [methOpen, setMethOpen] = useState(false);
   if (!structured) return null;
   const value = formatStatValue(structured.value, structured.unit);
   const sourceLabel = structured.source
     || `ACS ${structured.year} ${structured.dataset === "acs1" ? "1-Year" : "5-Year"} Estimates`;
   const tables = Array.isArray(structured.tables) ? structured.tables : [];
+  const nuances = Array.isArray(structured.nuances) ? structured.nuances : [];
+  const methodology = structured.methodology || null;
+  const hasMethPanel = nuances.length > 0 || !!methodology;
+
   return (
     <div className={styles.statCardChat}>
       <div className={styles.statCardLabel}>{structured.variable}</div>
@@ -221,6 +226,53 @@ function StatCard({ structured }) {
               Table {t.tableId}{i < tables.length - 1 ? "," : ""}
             </a>
           ))}
+        </div>
+      )}
+      {hasMethPanel && (
+        <div className={styles.statCardMethWrap}>
+          <button
+            type="button"
+            className={styles.statCardMethBtn}
+            onClick={() => setMethOpen(o => !o)}
+            aria-expanded={methOpen}
+          >
+            {methOpen ? "Hide methodology & caveats ▲" : "Methodology & caveats ▼"}
+          </button>
+          {methOpen && (
+            <div className={styles.statCardMethBody}>
+              {nuances.length > 0 && (
+                <ul className={styles.statCardNuanceList}>
+                  {nuances.map((n, i) => (
+                    <li key={i} className={styles.statCardNuanceItem}>
+                      <span className={styles.statCardNuanceMark} aria-hidden>⚠</span>
+                      <span>{n}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {methodology && (
+                <div className={styles.statCardMethPassage}>
+                  <p className={styles.statCardMethText}>{methodology.text}</p>
+                  {methodology.doc_url ? (
+                    <a
+                      href={methodology.doc_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.statCardMethCite}
+                    >
+                      — {methodology.doc_title}
+                      {methodology.page ? `, p. ${methodology.page}` : ""} ↗
+                    </a>
+                  ) : (
+                    <span className={styles.statCardMethCite}>
+                      — {methodology.doc_title}
+                      {methodology.page ? `, p. ${methodology.page}` : ""}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -370,6 +422,66 @@ function MoreInfo({ methodology, caveats }) {
   );
 }
 
+// ── ACS docs citation parsing ────────────────────────────────────────────────
+// Server prompts Claude to emit responses like:
+//   ...prose with [1] markers...
+//   Sources:
+//   [1] subject-definitions__p41__0
+//   [2] handbook-general__p18__2
+// Split that into prose + a structured sources list. If no Sources block is
+// present, returns { prose: text, sources: [] } unchanged.
+function splitSources(text) {
+  if (typeof text !== "string") return { prose: text, sources: [] };
+  const m = text.match(/\n\s*Sources?:\s*\n([\s\S]+)$/i);
+  if (!m) return { prose: text, sources: [] };
+  const lines = m[1].split("\n").map(l => l.trim()).filter(Boolean);
+  const sources = [];
+  for (const line of lines) {
+    const lm = line.match(/^\[(\d+)\]\s+([A-Za-z0-9_\-]+(?:__[A-Za-z0-9_\-]+)+)/);
+    if (!lm) break; // stop at first non-source line — block ends here
+    sources.push({ index: Number(lm[1]), chunk_id: lm[2] });
+  }
+  if (sources.length === 0) return { prose: text, sources: [] };
+  return { prose: text.slice(0, m.index).trimEnd(), sources };
+}
+
+// Decode a chunk_id like "subject-definitions__p41__0" into { doc_id, page }.
+// HTML chunks use "__html__" as the middle segment instead of a page.
+function decodeChunkId(chunkId) {
+  const m = String(chunkId || "").match(/^(.+?)__(p\d+|html)__\d+$/);
+  if (!m) return { doc_id: chunkId, page: null };
+  const doc_id = m[1];
+  const page = m[2].startsWith("p") ? Number(m[2].slice(1)) : null;
+  return { doc_id, page };
+}
+
+function SourcesBlock({ sources, docMap }) {
+  if (!sources || sources.length === 0) return null;
+  return (
+    <div className={styles.sourcesBlock}>
+      <div className={styles.sourcesLabel}>Sources</div>
+      {sources.map(s => {
+        const { doc_id, page } = decodeChunkId(s.chunk_id);
+        const title = docMap.get(doc_id)?.title || doc_id;
+        return (
+          <div key={s.index} className={styles.sourceLine}>
+            <span className={styles.sourceIndex}>[{s.index}]</span>
+            <a
+              href={`/learn/passage/${encodeURIComponent(s.chunk_id)}`}
+              className={styles.sourceLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {title}
+              {page != null ? <span className={styles.sourcePage}> · p.{page}</span> : null}
+            </a>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Component ────────────────────────────────────────────────────────────────
 export default function ChatPage() {
   const [mode, setMode] = useState(null); // null = show mode picker
@@ -378,8 +490,26 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [expandedChartIndex, setExpandedChartIndex] = useState(null);
   const [minimizedCharts, setMinimizedCharts] = useState({});
+  // doc_id → { title, has_pdf } for resolving chunk-id citations to readable titles.
+  // Loaded once on first ACS-cited message; index endpoint gracefully degrades if absent.
+  const [docMap, setDocMap] = useState(() => new Map());
   const listRef = useRef(null);
   const textareaRef = useRef(null);
+
+  // Fetch the doc directory once — we need it to resolve chunk_id → title in citations.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/acs-search?action=docs")
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => {
+        if (cancelled || !json?.docs) return;
+        const m = new Map();
+        for (const d of json.docs) m.set(d.id, { title: d.title, has_pdf: d.has_pdf });
+        setDocMap(m);
+      })
+      .catch(() => { /* index may not be built yet — citations will fall back to chunk_id */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const atLimit = messages.length >= MAX_EXCHANGES * 2;
   const activeMode = MODES.find(m => m.id === mode);
@@ -601,9 +731,15 @@ export default function ChatPage() {
                               />
                             ) : msg.structured ? (
                               <StatCard structured={msg.structured} />
-                            ) : (
-                              renderMarkdown(msg.content)
-                            )
+                            ) : (() => {
+                                const { prose, sources } = splitSources(msg.content);
+                                return (
+                                  <>
+                                    {renderMarkdown(prose)}
+                                    <SourcesBlock sources={sources} docMap={docMap} />
+                                  </>
+                                );
+                              })()
                           ) : (
                             msg.content
                           )}
