@@ -1,123 +1,123 @@
-/* styles/globals.css — theme tokens live on :root; light mode overrides on html[data-theme="light"] */
+/* styles/globals.css — light is default; data-theme="dark" opts into dark mode. */
 
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Default = dark (used before data-theme is set and for dark mode) */
+/* Default = light */
 :root {
-  color-scheme: dark;
-  --bg:            #0b0e1e;
-  --surface:       #12172b;
-  --surface-2:     #1a2138;
-  --border:        rgba(160, 174, 192, 0.22);
-  --border-hover:  rgba(160, 174, 192, 0.32);
-  --accent:        #4db8ff;
-  --accent-glow:   rgba(77, 184, 255, 0.28);
-  --green:         #66ffcc;
-  --muted:         #a0aec0;
-  --text:          #f7fafc;
-  --text-dim:      #a0aec0;
-  --error:         #fc8181;
-  --title-gradient: linear-gradient(90deg, #b19fff 0%, #4db8ff 48%, #66ffcc 100%);
-  --orb-gradient: radial-gradient(ellipse at 50% 0%, rgba(77, 184, 255, 0.22) 0%, rgba(177, 159, 255, 0.1) 35%, transparent 65%);
-  --badge-bg:      rgba(102, 255, 204, 0.08);
-  --badge-border:  rgba(102, 255, 204, 0.28);
-  --select-option-bg: #151a2e;
-  --result-value-shadow: 0 0 28px rgba(77, 184, 255, 0.12);
-  --chart-surface:   #12172b;
-  --chart-border:    rgba(160, 174, 192, 0.12);
-  --chart-grid:      rgba(160, 174, 192, 0.1);
-  --chart-axis:      rgba(160, 174, 192, 0.2);
-  --chart-tick:      #a0aec0;
-  --chart-tooltip-bg: #151a2e;
-  --chart-tooltip-border: rgba(160, 174, 192, 0.2);
-  --chart-muted:     #a0aec0;
-  --chart-faint:     #718096;
-  --chart-source:    #718096;
-  --chart-empty:     #718096;
-  --result-glow:     0 0 32px rgba(102, 255, 204, 0.1), 0 0 56px rgba(77, 184, 255, 0.08);
-  --chart-card-glow: 0 0 40px rgba(177, 159, 255, 0.12), 0 0 64px rgba(77, 184, 255, 0.08);
-  --metric-label-glow: 0 0 14px rgba(102, 255, 204, 0.45);
-  --scrollbar-reveal: rgba(160, 174, 192, 0.42);
-  --font-head:  "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono:  "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-html[data-theme="dark"] {
-  color-scheme: dark;
-  /* Same tokens as :root — keeps attribute and variables aligned when script sets dark */
-  --bg:            #0b0e1e;
-  --surface:       #12172b;
-  --surface-2:     #1a2138;
-  --border:        rgba(160, 174, 192, 0.22);
-  --border-hover:  rgba(160, 174, 192, 0.32);
-  --accent:        #4db8ff;
-  --accent-glow:   rgba(77, 184, 255, 0.28);
-  --green:         #66ffcc;
-  --muted:         #a0aec0;
-  --text:          #f7fafc;
-  --text-dim:      #a0aec0;
-  --error:         #fc8181;
-  --title-gradient: linear-gradient(90deg, #b19fff 0%, #4db8ff 48%, #66ffcc 100%);
-  --orb-gradient: radial-gradient(ellipse at 50% 0%, rgba(77, 184, 255, 0.22) 0%, rgba(177, 159, 255, 0.1) 35%, transparent 65%);
-  --badge-bg:      rgba(102, 255, 204, 0.08);
-  --badge-border:  rgba(102, 255, 204, 0.28);
-  --select-option-bg: #151a2e;
-  --result-value-shadow: 0 0 28px rgba(77, 184, 255, 0.12);
-  --chart-surface:   #12172b;
-  --chart-border:    rgba(160, 174, 192, 0.12);
-  --chart-grid:      rgba(160, 174, 192, 0.1);
-  --chart-axis:      rgba(160, 174, 192, 0.2);
-  --chart-tick:      #a0aec0;
-  --chart-tooltip-bg: #151a2e;
-  --chart-tooltip-border: rgba(160, 174, 192, 0.2);
-  --chart-muted:     #a0aec0;
-  --chart-faint:     #718096;
-  --chart-source:    #718096;
-  --chart-empty:     #718096;
-  --result-glow:     0 0 32px rgba(102, 255, 204, 0.1), 0 0 56px rgba(77, 184, 255, 0.08);
-  --chart-card-glow: 0 0 40px rgba(177, 159, 255, 0.12), 0 0 64px rgba(77, 184, 255, 0.08);
-  --metric-label-glow: 0 0 14px rgba(102, 255, 204, 0.45);
+  color-scheme: light;
+  --bg:            #faf8f4;
+  --surface:       #ffffff;
+  --surface-2:     #f3eff6;
+  --border:        #e7e2ee;
+  --border-hover:  #d6cde2;
+  --accent:        #7c3aed;
+  --accent-glow:   rgba(124, 58, 237, 0.22);
+  --green:         #7c3aed;
+  --muted:         #6b6478;
+  --text:          #2a2333;
+  --text-dim:      #4a4356;
+  --error:         #b91c1c;
+  --title-gradient: linear-gradient(90deg, #7c3aed 0%, #7c3aed 100%);
+  --orb-gradient: radial-gradient(ellipse at 50% 0%, rgba(124, 58, 237, 0.18) 0%, rgba(124, 58, 237, 0.07) 40%, transparent 68%);
+  --badge-bg:      rgba(124, 58, 237, 0.08);
+  --badge-border:  rgba(124, 58, 237, 0.28);
+  --select-option-bg: #ffffff;
+  --result-value-shadow: none;
+  --chart-surface:   #ffffff;
+  --chart-border:    #e7e2ee;
+  --chart-grid:      #efeaf5;
+  --chart-axis:      #d6cde2;
+  --chart-tick:      #6b6478;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-border: #e7e2ee;
+  --chart-muted:     #6b6478;
+  --chart-faint:     #a89cb8;
+  --chart-source:    #a89cb8;
+  --chart-empty:     #6b6478;
+  --result-glow:     0 0 24px rgba(124, 58, 237, 0.10), 0 4px 18px rgba(42, 35, 51, 0.05);
+  --chart-card-glow: 0 0 30px rgba(124, 58, 237, 0.10), 0 8px 24px rgba(42, 35, 51, 0.05);
+  --metric-label-glow: none;
+  --scrollbar-reveal: rgba(74, 67, 86, 0.42);
+  --font-head:  "Lora", "Source Serif 4", "Iowan Old Style", "Charter", Georgia, "Times New Roman", serif;
+  --font-mono:  "Lora", "Source Serif 4", Georgia, serif;
 }
 
 html[data-theme="light"] {
   color-scheme: light;
-  --bg:            #f8f9fd;
+  --bg:            #faf8f4;
   --surface:       #ffffff;
-  --surface-2:     #eef2f8;
-  --border:        #e2e8f0;
-  --border-hover:  rgba(45, 55, 72, 0.14);
-  --accent:        #62b6ff;
-  --accent-glow:   rgba(98, 182, 255, 0.35);
-  --green:         #47d1b2;
-  --muted:         #4a5568;
-  --text:          #2d3748;
-  --text-dim:      #4a5568;
-  --error:         #e53e3e;
-  --title-gradient: linear-gradient(90deg, #a594f9 0%, #62b6ff 48%, #47d1b2 100%);
-  --orb-gradient: radial-gradient(ellipse at 50% 0%, rgba(98, 182, 255, 0.35) 0%, rgba(165, 148, 249, 0.15) 40%, transparent 68%);
-  --badge-bg:      rgba(71, 209, 178, 0.12);
-  --badge-border:  rgba(71, 209, 178, 0.35);
+  --surface-2:     #f3eff6;
+  --border:        #e7e2ee;
+  --border-hover:  #d6cde2;
+  --accent:        #7c3aed;
+  --accent-glow:   rgba(124, 58, 237, 0.22);
+  --green:         #7c3aed;
+  --muted:         #6b6478;
+  --text:          #2a2333;
+  --text-dim:      #4a4356;
+  --error:         #b91c1c;
+  --title-gradient: linear-gradient(90deg, #7c3aed 0%, #7c3aed 100%);
+  --orb-gradient: radial-gradient(ellipse at 50% 0%, rgba(124, 58, 237, 0.18) 0%, rgba(124, 58, 237, 0.07) 40%, transparent 68%);
+  --badge-bg:      rgba(124, 58, 237, 0.08);
+  --badge-border:  rgba(124, 58, 237, 0.28);
   --select-option-bg: #ffffff;
   --result-value-shadow: none;
   --chart-surface:   #ffffff;
-  --chart-border:    #e2e8f0;
-  --chart-grid:      #edf2f7;
-  --chart-axis:      #cbd5e1;
-  --chart-tick:      #718096;
+  --chart-border:    #e7e2ee;
+  --chart-grid:      #efeaf5;
+  --chart-axis:      #d6cde2;
+  --chart-tick:      #6b6478;
   --chart-tooltip-bg: #ffffff;
-  --chart-tooltip-border: #e2e8f0;
-  --chart-muted:     #718096;
-  --chart-faint:     #a0aec0;
-  --chart-source:    #a0aec0;
-  --chart-empty:     #718096;
-  --result-glow:     0 0 28px rgba(71, 209, 178, 0.12), 0 4px 20px rgba(45, 55, 72, 0.06);
-  --chart-card-glow: 0 0 36px rgba(165, 148, 249, 0.12), 0 8px 28px rgba(45, 55, 72, 0.06);
-  --metric-label-glow: 0 0 12px rgba(71, 209, 178, 0.4);
-  --scrollbar-reveal: rgba(71, 85, 105, 0.42);
+  --chart-tooltip-border: #e7e2ee;
+  --chart-muted:     #6b6478;
+  --chart-faint:     #a89cb8;
+  --chart-source:    #a89cb8;
+  --chart-empty:     #6b6478;
+  --result-glow:     0 0 24px rgba(124, 58, 237, 0.10), 0 4px 18px rgba(42, 35, 51, 0.05);
+  --chart-card-glow: 0 0 30px rgba(124, 58, 237, 0.10), 0 8px 24px rgba(42, 35, 51, 0.05);
+  --metric-label-glow: none;
+  --scrollbar-reveal: rgba(74, 67, 86, 0.42);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:            #15121d;
+  --surface:       #1d1828;
+  --surface-2:     #271f37;
+  --border:        rgba(196, 181, 224, 0.18);
+  --border-hover:  rgba(196, 181, 224, 0.30);
+  --accent:        #a855f7;
+  --accent-glow:   rgba(168, 85, 247, 0.28);
+  --green:         #a855f7;
+  --muted:         #b5acc6;
+  --text:          #f4eef9;
+  --text-dim:      #c8bfd6;
+  --error:         #fca5a5;
+  --title-gradient: linear-gradient(90deg, #a855f7 0%, #a855f7 100%);
+  --orb-gradient: radial-gradient(ellipse at 50% 0%, rgba(168, 85, 247, 0.22) 0%, rgba(168, 85, 247, 0.10) 40%, transparent 68%);
+  --badge-bg:      rgba(168, 85, 247, 0.10);
+  --badge-border:  rgba(168, 85, 247, 0.32);
+  --select-option-bg: #1d1828;
+  --result-value-shadow: 0 0 24px rgba(168, 85, 247, 0.14);
+  --chart-surface:   #1d1828;
+  --chart-border:    rgba(196, 181, 224, 0.14);
+  --chart-grid:      rgba(196, 181, 224, 0.12);
+  --chart-axis:      rgba(196, 181, 224, 0.22);
+  --chart-tick:      #b5acc6;
+  --chart-tooltip-bg: #271f37;
+  --chart-tooltip-border: rgba(196, 181, 224, 0.22);
+  --chart-muted:     #b5acc6;
+  --chart-faint:     #8a809e;
+  --chart-source:    #8a809e;
+  --chart-empty:     #8a809e;
+  --result-glow:     0 0 28px rgba(168, 85, 247, 0.14), 0 0 48px rgba(168, 85, 247, 0.08);
+  --chart-card-glow: 0 0 36px rgba(168, 85, 247, 0.14), 0 0 56px rgba(168, 85, 247, 0.08);
+  --metric-label-glow: 0 0 14px rgba(168, 85, 247, 0.40);
 }
 
 @keyframes pulse {

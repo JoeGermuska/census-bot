@@ -78,28 +78,18 @@ function FeatureCardContent({ card }) {
   );
 }
 
-// ── Per-card glow — bottom inset border + downward bloom ───────────────────
-const CARD_GLOW = [
-  "inset 0 -1px 0 rgba(168,85,247,0.55),  0 14px 36px -6px rgba(168,85,247,0.22)", // violet
-  "inset 0 -1px 0 rgba(77,184,255,0.55),  0 14px 36px -6px rgba(77,184,255,0.22)", // cyan
-  "inset 0 -1px 0 rgba(52,211,153,0.50),  0 14px 36px -6px rgba(52,211,153,0.18)", // teal
-];
-
-// ── Static grid — reduced-motion and SSR fallback ─────────────────────────
-// Plain divs, no animation — immediately visible at full scale and color.
-
 function StaticCardGrid() {
   return (
     <div className={landing.cardGrid}>
-      {CARDS.map((card, i) => (
-        <div
+      {CARDS.map((card) => (
+        <Link
           key={card.href}
-          style={{ height: "100%", borderRadius: "clamp(16px, 2vw, 20px)", boxShadow: CARD_GLOW[i] }}
+          href={card.href}
+          className={card.cardClass}
+          aria-label={card.aria}
         >
-          <Link href={card.href} className={card.cardClass} aria-label={card.aria} style={{ height: "100%" }}>
-            <FeatureCardContent card={card} />
-          </Link>
-        </div>
+          <FeatureCardContent card={card} />
+        </Link>
       ))}
     </div>
   );

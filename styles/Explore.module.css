@@ -8,22 +8,11 @@
 }
 
 .pageTitle {
-  font-size: clamp(1.35rem, 3.5vw, 1.75rem);
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: clamp(1.45rem, 3.5vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
   text-align: center;
-  background: linear-gradient(90deg, #60a5fa 0%, #a855f7 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: var(--text);
-}
-
-:global(html[data-theme="light"]) .pageTitle {
-  background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--accent);
 }
 
 .progressBlock {
@@ -57,7 +46,7 @@
 .progressFill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #60a5fa 0%, #a855f7 100%);
+  background: var(--accent);
   transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -120,20 +109,16 @@
 
 .choiceCheck {
   font-size: 0.95rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
   min-width: 1em;
-  opacity: 0.55;
+  opacity: 0.4;
   transition: opacity 0.15s, color 0.15s;
 }
 
 .choiceSelected .choiceCheck {
   opacity: 1;
-  color: #d8b4fe;
-}
-
-:global(html[data-theme="light"]) .choiceSelected .choiceCheck {
-  color: #7c3aed;
+  color: var(--accent);
 }
 
 @media (max-width: 720px) {
@@ -242,31 +227,15 @@
 }
 
 .choice:hover {
-  border-color: rgba(191, 219, 254, 0.72);
-  box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.25);
+  border-color: var(--accent);
 }
 
-:global(html[data-theme="light"]) .choice:hover {
-  border-color: rgba(37, 99, 235, 0.46);
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.14);
-}
-
-.choiceSelected {
-  border-color: #a855f7;
-  color: #d8b4fe;
-  box-shadow:
-    0 0 0 1px rgba(168, 85, 247, 0.5),
-    0 0 22px rgba(168, 85, 247, 0.22);
-  background: rgba(168, 85, 247, 0.12);
-}
-
-:global(html[data-theme="light"]) .choiceSelected {
-  color: #6b21a8;
-  border-color: #9333ea;
-  box-shadow:
-    0 0 0 1px rgba(147, 51, 234, 0.35),
-    0 0 18px rgba(147, 51, 234, 0.15);
-  background: rgba(147, 51, 234, 0.08);
+.choiceSelected,
+.choiceSelected:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .footerNav {
@@ -305,20 +274,23 @@
   align-items: center;
   gap: 0.4rem;
   padding: 0.6rem 1.4rem;
-  border-radius: 11px;
+  border-radius: 9px;
   border: none;
-  background: #2563eb;
+  background: var(--accent);
   color: #fff;
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
+  transition: background 0.15s, opacity 0.15s;
 }
 
 .btnPrimary:hover:not(:disabled) {
-  opacity: 0.92;
-  transform: translateY(-1px);
+  background: #6d28d9;
+}
+
+:global(html[data-theme="dark"]) .btnPrimary:hover:not(:disabled) {
+  background: #9333ea;
 }
 
 .btnPrimary:disabled {
@@ -528,13 +500,8 @@
 }
 
 .statCard:hover {
-  border-color: rgba(77, 184, 255, 0.32);
-  box-shadow: var(--result-glow), 0 8px 32px rgba(0, 0, 0, 0.15);
-  transform: translateY(-3px);
-}
-
-:global(html[data-theme="light"]) .statCard:hover {
-  border-color: rgba(37, 99, 235, 0.3);
+  border-color: var(--accent);
+  box-shadow: var(--result-glow);
 }
 
 @keyframes cardReveal {
@@ -608,14 +575,7 @@
 }
 
 .statChartBtn:hover:not(:disabled) {
-  background: rgba(77, 184, 255, 0.08);
-  border-color: rgba(77, 184, 255, 0.3);
-  color: var(--accent);
-}
-
-:global(html[data-theme="light"]) .statChartBtn:hover:not(:disabled) {
-  background: rgba(37, 99, 235, 0.07);
-  border-color: rgba(37, 99, 235, 0.28);
+  border-color: var(--accent);
   color: var(--accent);
 }
 
@@ -625,14 +585,8 @@
 }
 
 .statChartBtnActive {
-  background: rgba(77, 184, 255, 0.1);
-  border-color: rgba(77, 184, 255, 0.25);
+  border-color: var(--accent);
   color: var(--accent);
-}
-
-:global(html[data-theme="light"]) .statChartBtnActive {
-  background: rgba(37, 99, 235, 0.08);
-  border-color: rgba(37, 99, 235, 0.25);
 }
 
 .statSource {
@@ -657,16 +611,11 @@
   margin-top: 0.75rem;
   padding: 10px 14px;
   border-radius: 9px;
-  background: rgba(77, 184, 255, 0.06);
-  border: 1px solid rgba(77, 184, 255, 0.15);
-  font-size: 0.88rem;
-  line-height: 1.55;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+  line-height: 1.6;
   color: var(--text-dim);
-}
-
-:global(html[data-theme="light"]) .trendSummary {
-  background: rgba(37, 99, 235, 0.05);
-  border-color: rgba(37, 99, 235, 0.14);
 }
 
 /* ── Screen-reader only utility ── */

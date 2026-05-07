@@ -10,10 +10,10 @@
   --c-text: var(--text);
   --c-text-dim: var(--text-dim);
   --c-muted: var(--muted);
-  --c-accent: #DA7756;
-  --c-accent-soft: rgba(218, 119, 86, 0.12);
-  --c-accent-glow: rgba(218, 119, 86, 0.18);
-  --c-bot-bg: linear-gradient(135deg, #DA7756 0%, #C4633F 100%);
+  --c-accent: var(--accent);
+  --c-accent-soft: rgba(124, 58, 237, 0.08);
+  --c-accent-glow: rgba(124, 58, 237, 0.18);
+  --c-bot-bg: var(--accent);
 
   display: flex;
   flex-direction: column;
@@ -23,8 +23,13 @@
   margin: 0 auto;
   max-width: 980px;
   width: 100%;
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  font-family: inherit;
   color: var(--c-text);
+}
+
+:global(html[data-theme="dark"]) .chatPage {
+  --c-accent-soft: rgba(168, 85, 247, 0.10);
+  --c-accent-glow: rgba(168, 85, 247, 0.22);
 }
 
 /* ── Header ─────────────────────────────────────────────── */
@@ -104,22 +109,17 @@
   align-items: center;
   gap: 0.55rem;
   padding: 1.4rem 1rem;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--c-border);
   background: var(--c-surface);
+  font-family: inherit;
   cursor: pointer;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  transition: border-color 0.18s ease;
   text-align: center;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  will-change: box-shadow, border-color, background;
 }
 
 .modeCard:hover {
   border-color: var(--accent);
-  background: var(--c-surface);
-  box-shadow: 0 2px 12px var(--accent-glow);
-  transform: translateY(-2px);
 }
 
 .modeIcon {
@@ -235,9 +235,8 @@
 }
 
 .suggestion:hover {
-  color: var(--c-text);
+  color: var(--c-accent);
   border-color: var(--c-accent);
-  background: var(--c-accent-soft);
 }
 
 /* ── Individual messages ─────────────────────────────────── */
@@ -266,7 +265,7 @@
 }
 
 .avatarAssistant {
-  background: var(--c-bot-bg);
+  background: var(--c-accent);
   color: #fff;
 }
 
@@ -328,8 +327,8 @@
   border: 1px solid var(--c-border);
   border-radius: 4px;
   padding: 0.1rem 0.35rem;
-  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-  font-size: 0.83em;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
   color: var(--c-accent);
 }
 

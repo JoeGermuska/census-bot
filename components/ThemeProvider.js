@@ -11,7 +11,7 @@ import {
 const STORAGE_KEY = "census-bot-theme";
 
 const ThemeContext = createContext({
-  theme: "dark",
+  theme: "light",
   setTheme: () => {},
   toggleTheme: () => {},
 });
@@ -27,7 +27,7 @@ function readStoredTheme() {
 }
 
 function resolveTheme() {
-  return readStoredTheme() ?? "dark";
+  return readStoredTheme() ?? "light";
 }
 
 function applyTheme(theme) {
@@ -41,7 +41,7 @@ function applyTheme(theme) {
 }
 
 export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState("dark");
+  const [theme, setThemeState] = useState("light");
 
   useLayoutEffect(() => {
     const attr = document.documentElement.dataset.theme;

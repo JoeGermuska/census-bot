@@ -38,21 +38,22 @@ function buildTrendSummary(points, metric) {
   return `${metric} ${dir} from ${fmt(first.numericValue)} (${first.year}) to ${fmt(last.numericValue)} (${last.year}) — ${sign}${pct}%.`;
 }
 
-// Per-metric accent colors and icons
+// Per-metric icons (color is unified to the purple accent across all metrics)
 function getMetricMeta(metricLabel) {
   const l = (metricLabel || "").toLowerCase();
-  if (l.includes("income") || l.includes("per capita")) return { color: "#4db8ff", icon: "💰" };
-  if (l.includes("population")) return { color: "#66ffcc", icon: "👥" };
-  if (l.includes("home value") || l.includes("housing value")) return { color: "#a855f7", icon: "🏠" };
-  if (l.includes("rent")) return { color: "#c084fc", icon: "🏢" };
-  if (l.includes("housing unit")) return { color: "#818cf8", icon: "🏘️" };
-  if (l.includes("poverty")) return { color: "#f97316", icon: "📊" };
-  if (l.includes("unemployment")) return { color: "#fb923c", icon: "📉" };
-  if (l.includes("employment")) return { color: "#34d399", icon: "📈" };
-  if (l.includes("age")) return { color: "#fbbf24", icon: "📅" };
-  if (l.includes("commute") || l.includes("travel")) return { color: "#ec4899", icon: "🚇" };
-  if (l.includes("bachelor") || l.includes("education")) return { color: "#8b5cf6", icon: "🎓" };
-  return { color: "#4db8ff", icon: "📌" };
+  const color = "var(--accent)";
+  if (l.includes("income") || l.includes("per capita")) return { color, icon: "💰" };
+  if (l.includes("population")) return { color, icon: "👥" };
+  if (l.includes("home value") || l.includes("housing value")) return { color, icon: "🏠" };
+  if (l.includes("rent")) return { color, icon: "🏢" };
+  if (l.includes("housing unit")) return { color, icon: "🏘️" };
+  if (l.includes("poverty")) return { color, icon: "📊" };
+  if (l.includes("unemployment")) return { color, icon: "📉" };
+  if (l.includes("employment")) return { color, icon: "📈" };
+  if (l.includes("age")) return { color, icon: "📅" };
+  if (l.includes("commute") || l.includes("travel")) return { color, icon: "🚇" };
+  if (l.includes("bachelor") || l.includes("education")) return { color, icon: "🎓" };
+  return { color, icon: "📌" };
 }
 
 function CardSpinner() {
@@ -60,7 +61,7 @@ function CardSpinner() {
     <span style={{
       display: "inline-block",
       width: 13, height: 13,
-      border: "2px solid rgba(77,184,255,0.3)",
+      border: "2px solid var(--border)",
       borderTopColor: "var(--accent)",
       borderRadius: "50%",
       animation: "spin 0.6s linear infinite",

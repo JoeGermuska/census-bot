@@ -1,6 +1,5 @@
-/* Home + About — home hero/card scales tuned for laptop / MacBook viewport */
+/* Landing + About — single purple accent, minimal animation. */
 
-/* ── 3D particle map wrapper ── */
 .pageWrapper {
   position: relative;
 }
@@ -18,7 +17,6 @@
   z-index: 1;
 }
 
-
 .hero {
   text-align: center;
   margin-bottom: clamp(2.5rem, 6vw, 4.5rem);
@@ -26,25 +24,15 @@
 
 .title {
   font-size: clamp(2.75rem, 9vw, 5rem);
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
   margin-bottom: clamp(1.15rem, 2.8vw, 1.7rem);
   color: var(--text);
 }
 
 .titleGradient {
-  background: linear-gradient(90deg, #22d3ee 0%, #a855f7 55%, #34d399 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-:global(html[data-theme="light"]) .titleGradient {
-  background: linear-gradient(90deg, #0891b2 0%, #7c3aed 50%, #059669 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--accent);
 }
 
 .aboutTitle {
@@ -53,17 +41,7 @@
 }
 
 .aboutTitle .titleGradient {
-  background: linear-gradient(90deg, #8fc3de 0%, #a993d8 52%, #89c7b2 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-:global(html[data-theme="light"]) .aboutTitle .titleGradient {
-  background: linear-gradient(90deg, #4d7ea8 0%, #7f6aa8 52%, #4f8f77 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--accent);
 }
 
 .leadStrong {
@@ -72,7 +50,7 @@
   color: var(--text);
   max-width: min(46rem, 90vw);
   margin: 0 auto 0.78rem;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
 .lead {
@@ -80,7 +58,7 @@
   color: var(--muted);
   max-width: min(46rem, 90vw);
   margin: 0 auto;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .cardGrid {
@@ -94,14 +72,14 @@
 @media (max-width: 720px) {
   .leadStrong {
     font-size: 1.22rem;
-    line-height: 1.38;
+    line-height: 1.4;
     max-width: 20rem;
     text-wrap: balance;
   }
 
   .lead {
     font-size: 0.98rem;
-    line-height: 1.52;
+    line-height: 1.55;
     max-width: 21rem;
     text-wrap: balance;
   }
@@ -117,7 +95,7 @@
 }
 
 .featureCard {
-  border-radius: clamp(16px, 2vw, 20px);
+  border-radius: clamp(14px, 1.8vw, 18px);
   padding: clamp(2.1rem, 4vw, 3.2rem) clamp(1.75rem, 3.4vw, 2.6rem);
   background: var(--surface);
   border: 1px solid var(--border);
@@ -130,14 +108,12 @@
   position: relative;
   text-decoration: none;
   cursor: pointer;
-  /* Keep compositing stable without forcing 3D transforms (prevents Safari hover jitter). */
-  will-change: box-shadow, border-color;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
   isolation: isolate;
-  transition:
-    box-shadow 0.4s ease,
-    border-color 0.35s ease;
+  transition: border-color 0.2s ease;
+}
+
+.featureCard:hover {
+  border-color: var(--accent);
 }
 
 .featureCard:focus-visible {
@@ -145,7 +121,6 @@
   outline-offset: 3px;
 }
 
-/* No hover transform — scale/translate under the cursor causes Safari/macOS hover “shake” with glow cards. */
 .featureCardInner {
   display: flex;
   flex-direction: column;
@@ -155,56 +130,11 @@
   flex: 1;
 }
 
-.featureCardPurple {
-  border-color: rgba(252, 165, 165, 0.58);
-  box-shadow:
-    0 0 0 1px rgba(252, 165, 165, 0.18),
-    0 10px 28px rgba(0, 0, 0, 0.12);
-}
-
-.featureCardPurple:hover {
-  border-color: rgba(254, 202, 202, 0.76);
-  box-shadow:
-    0 0 0 1px rgba(254, 202, 202, 0.46),
-    0 0 26px rgba(252, 165, 165, 0.66),
-    0 0 46px rgba(252, 165, 165, 0.42),
-    0 0 66px rgba(254, 202, 202, 0.28),
-    0 18px 40px rgba(0, 0, 0, 0.18);
-}
-
-.featureCardBlue {
-  border-color: rgba(147, 197, 253, 0.6);
-  box-shadow:
-    0 0 0 1px rgba(147, 197, 253, 0.18),
-    0 10px 28px rgba(0, 0, 0, 0.12);
-}
-
-.featureCardBlue:hover {
-  border-color: rgba(191, 219, 254, 0.78);
-  box-shadow:
-    0 0 0 1px rgba(191, 219, 254, 0.46),
-    0 0 26px rgba(59, 130, 246, 0.62),
-    0 0 46px rgba(59, 130, 246, 0.38),
-    0 0 66px rgba(37, 99, 235, 0.26),
-    0 18px 40px rgba(0, 0, 0, 0.18);
-}
-
+/* Variant classes kept (referenced by JS) but visually identical. */
+.featureCardPurple,
+.featureCardBlue,
 .featureCardTeal {
-  border-color: rgba(134, 239, 172, 0.62);
-  box-shadow:
-    0 0 0 1px rgba(134, 239, 172, 0.22),
-    0 0 28px rgba(45, 212, 191, 0.08),
-    0 10px 28px rgba(0, 0, 0, 0.12);
-}
-
-.featureCardTeal:hover {
-  border-color: rgba(187, 247, 208, 0.8);
-  box-shadow:
-    0 0 0 1px rgba(187, 247, 208, 0.48),
-    0 0 28px rgba(45, 212, 191, 0.62),
-    0 0 48px rgba(45, 212, 191, 0.38),
-    0 0 68px rgba(20, 184, 166, 0.26),
-    0 18px 40px rgba(0, 0, 0, 0.18);
+  border-color: var(--border);
 }
 
 .iconCircle {
@@ -217,33 +147,26 @@
   justify-content: center;
   font-size: clamp(1.65rem, 3vw, 2.35rem);
   line-height: 1;
-  color: var(--muted);
-  /* No transform on hover — scale still triggers subpixel jitter in Safari with flex + glow. */
-  transition:
-    background-color 0.4s ease,
-    color 0.4s ease;
+  color: var(--accent);
+  background: rgba(124, 58, 237, 0.1);
+  transition: background-color 0.2s ease;
 }
 
-.iconPurple {
-  background: rgba(168, 85, 247, 0.18);
+:global(html[data-theme="dark"]) .iconCircle {
+  background: rgba(168, 85, 247, 0.16);
 }
 
-.featureCardPurple:hover .iconPurple {
-  background: rgba(168, 85, 247, 0.58);
-  color: #f3e8ff;
-}
-
-.iconBlue {
-  background: rgba(59, 130, 246, 0.18);
-}
-
-.featureCardBlue:hover .iconBlue {
-  background: rgba(59, 130, 246, 0.58);
-  color: #dbeafe;
-}
-
+.iconPurple,
+.iconBlue,
 .iconTeal {
-  background: rgba(45, 212, 191, 0.18);
+  background: rgba(124, 58, 237, 0.1);
+  color: var(--accent);
+}
+
+:global(html[data-theme="dark"]) .iconPurple,
+:global(html[data-theme="dark"]) .iconBlue,
+:global(html[data-theme="dark"]) .iconTeal {
+  background: rgba(168, 85, 247, 0.16);
 }
 
 .featureIcon {
@@ -256,38 +179,19 @@
   stroke-linejoin: round;
 }
 
-.featureCardTeal:hover .iconTeal {
-  background: rgba(45, 212, 191, 0.58);
-  color: #ccfbf1;
-}
-
-:global(html[data-theme="light"]) .featureCardPurple:hover .iconPurple {
-  background: rgba(168, 85, 247, 0.22);
-  color: #7c3aed;
-}
-
-:global(html[data-theme="light"]) .featureCardBlue:hover .iconBlue {
-  background: rgba(59, 130, 246, 0.22);
-  color: #2563eb;
-}
-
-:global(html[data-theme="light"]) .featureCardTeal:hover .iconTeal {
-  background: rgba(45, 212, 191, 0.22);
-  color: #0d9488;
-}
-
 .featureTitle {
   font-size: clamp(1.45rem, 2.75vw, 2rem);
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 0.85rem;
   color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .featureBody {
   font-size: clamp(0.9rem, 1.35vw, 1.05rem);
   color: var(--text-dim);
-  font-weight: 450;
-  line-height: 1.58;
+  font-weight: 400;
+  line-height: 1.62;
   max-width: 22rem;
   margin: 0 auto;
 }
@@ -304,81 +208,64 @@
   gap: 0.85rem;
   padding: clamp(1.02rem, 2.15vw, 1.28rem) clamp(2.4rem, 6vw, 3.9rem);
   min-width: min(23.5rem, 90vw);
-  border-radius: clamp(14px, 2vw, 18px);
+  border-radius: clamp(12px, 1.6vw, 14px);
   border: none;
+  font-family: inherit;
   font-size: clamp(1.02rem, 1.75vw, 1.12rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  letter-spacing: 0;
   text-decoration: none;
   cursor: pointer;
   color: #fff;
-  background: linear-gradient(90deg, #a855f7 0%, #6366f1 45%, #2dd4bf 100%);
-  box-shadow:
-    0 9px 24px rgba(0, 0, 0, 0.28),
-    0 0 18px rgba(99, 102, 241, 0.18),
-    0 0 30px rgba(45, 212, 191, 0.1);
-  transform: scale(1);
-  transition: filter 0.22s ease, box-shadow 0.26s ease, transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+  background: var(--accent);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.22);
+  transition: background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .ctaLargeLabel {
-  font-size: clamp(1.45rem, 2.75vw, 2rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: clamp(1.35rem, 2.55vw, 1.85rem);
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .ctaLargeIcon {
   display: inline-flex;
   line-height: 0;
-  transition: transform 0.28s cubic-bezier(0.33, 1, 0.32, 1);
 }
 
 .ctaLargeArrow {
   display: inline-block;
   font-size: 1.42em;
   line-height: 1;
-  transition: transform 0.28s cubic-bezier(0.33, 1, 0.32, 1);
 }
 
 .ctaLarge:hover {
-  filter: brightness(1.26) saturate(1.22);
-  box-shadow:
-    0 2px 0 rgba(255, 255, 255, 0.06) inset,
-    0 12px 30px rgba(99, 102, 241, 0.38),
-    0 0 40px rgba(168, 85, 247, 0.36),
-    0 0 60px rgba(59, 130, 246, 0.3),
-    0 0 82px rgba(45, 212, 191, 0.2);
-  transform: scale(1.04);
+  background: #6d28d9;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.32);
 }
 
-.ctaLarge:hover .ctaLargeIcon {
-  transform: rotate(14deg);
+:global(html[data-theme="dark"]) .ctaLarge {
+  background: var(--accent);
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.32);
 }
 
-.ctaLarge:hover .ctaLargeArrow {
-  transform: translateX(6px);
-}
-
-.ctaLarge:focus-visible .ctaLargeIcon {
-  transform: rotate(14deg);
-}
-
-.ctaLarge:focus-visible .ctaLargeArrow {
-  transform: translateX(6px);
+:global(html[data-theme="dark"]) .ctaLarge:hover {
+  background: #9333ea;
 }
 
 .ctaSub {
   margin-top: clamp(1rem, 2vw, 1.35rem);
   font-size: clamp(1rem, 1.75vw, 1.18rem);
   color: var(--muted);
+  font-style: italic;
 }
 
 .footerNote {
   margin-top: clamp(2.5rem, 5vw, 4rem);
   text-align: center;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   color: var(--muted);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
 }
 
 @media (max-width: 720px) {
@@ -407,7 +294,7 @@
 
   .featureBody {
     font-size: 0.9rem;
-    line-height: 1.45;
+    line-height: 1.5;
     max-width: 100%;
   }
 
@@ -415,7 +302,7 @@
     gap: 0.55rem;
     padding: 0.72rem 1rem;
     min-width: min(16.5rem, 86vw);
-    border-radius: 12px;
+    border-radius: 10px;
   }
 
   .ctaLargeLabel {
@@ -444,122 +331,45 @@
 }
 
 .sectionCard {
-  border-radius: 16px;
+  border-radius: 14px;
   padding: clamp(1.65rem, 3.5vw, 2.15rem) clamp(1.65rem, 3.5vw, 2.15rem) clamp(1.45rem, 3vw, 1.85rem);
   background: var(--surface);
   margin-bottom: 2rem;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  transition: border-color 0.22s ease;
+  border: 1px solid var(--border);
+  transition: border-color 0.2s ease;
 }
 
-.sectionCardOverview {
-  border-color: rgba(147, 197, 253, 0.32);
+.sectionCard:hover {
+  border-color: var(--accent);
 }
 
-.sectionCardOverview:hover {
-  border-color: rgba(191, 219, 254, 0.64);
-}
-
-.sectionCardTech {
-  border-color: rgba(125, 211, 252, 0.3);
-}
-
-.sectionCardTech:hover {
-  border-color: rgba(165, 243, 252, 0.62);
-}
-
-.sectionCardTeam {
-  border-color: rgba(196, 181, 253, 0.34);
-}
-
-.sectionCardTeam:hover {
-  border-color: rgba(221, 214, 254, 0.66);
-}
-
+.sectionCardOverview,
+.sectionCardTech,
+.sectionCardTeam,
 .sectionCardCredits {
-  border-color: rgba(134, 239, 172, 0.3);
-}
-
-.sectionCardCredits:hover {
-  border-color: rgba(187, 247, 208, 0.66);
-}
-
-:global(html[data-theme="light"]) .sectionCardOverview {
-  border-color: rgba(59, 130, 246, 0.28);
-}
-
-:global(html[data-theme="light"]) .sectionCardOverview:hover {
-  border-color: rgba(37, 99, 235, 0.44);
-}
-
-:global(html[data-theme="light"]) .sectionCardTech {
-  border-color: rgba(6, 182, 212, 0.28);
-}
-
-:global(html[data-theme="light"]) .sectionCardTech:hover {
-  border-color: rgba(8, 145, 178, 0.42);
-}
-
-:global(html[data-theme="light"]) .sectionCardTeam {
-  border-color: rgba(139, 92, 246, 0.26);
-}
-
-:global(html[data-theme="light"]) .sectionCardTeam:hover {
-  border-color: rgba(109, 40, 217, 0.4);
-}
-
-:global(html[data-theme="light"]) .sectionCardCredits {
-  border-color: rgba(34, 197, 94, 0.28);
-}
-
-:global(html[data-theme="light"]) .sectionCardCredits:hover {
-  border-color: rgba(22, 163, 74, 0.42);
+  border-color: var(--border);
 }
 
 .sectionHeading {
   font-size: clamp(1.65rem, 4.2vw, 2.45rem);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   margin-bottom: clamp(1.22rem, 2.55vw, 1.68rem);
+  color: var(--accent);
 }
 
-.sectionHeadingOverview {
-  color: #c9d9f2;
-}
-
-.sectionHeadingTech {
-  color: #c2eaf0;
-}
-
-.sectionHeadingTeam {
-  color: #e8e2fa;
-}
-
+.sectionHeadingOverview,
+.sectionHeadingTech,
+.sectionHeadingTeam,
 .sectionHeadingCredits {
-  color: #c8f2d8;
-}
-
-:global(html[data-theme="light"]) .sectionHeadingOverview {
-  color: #93b4e8;
-}
-
-:global(html[data-theme="light"]) .sectionHeadingTech {
-  color: #7ebfcf;
-}
-
-:global(html[data-theme="light"]) .sectionHeadingTeam {
-  color: #a78bfa;
-}
-
-:global(html[data-theme="light"]) .sectionHeadingCredits {
-  color: #6bbf8a;
+  color: var(--accent);
 }
 
 .sectionBody {
   font-size: clamp(1.02rem, 1.45vw, 1.14rem);
   color: var(--text-dim);
-  line-height: 1.68;
+  line-height: 1.7;
 }
 
 .sectionBodySpaced {
@@ -568,23 +378,19 @@
 
 .creditsBuilt {
   font-size: clamp(1.1rem, 1.55vw, 1.24rem);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text);
   line-height: 1.6;
   margin: 0;
 }
 
 .creditsLink {
-  color: #3b82f6;
-  font-weight: 800;
+  color: var(--accent);
+  font-weight: 600;
   font-size: inherit;
   text-decoration: none;
   border-bottom: 1px solid transparent;
-  transition: border-color 0.18s ease, color 0.18s ease;
-}
-
-:global(html[data-theme="light"]) .creditsLink {
-  color: #2563eb;
+  transition: border-color 0.18s ease;
 }
 
 .creditsLink:hover {
@@ -605,7 +411,7 @@
 }
 
 .bulletList li::marker {
-  color: #a855f7;
+  color: var(--accent);
 }
 
 .techGrid {
@@ -623,8 +429,7 @@
 .techCol h3 {
   font-size: clamp(0.95rem, 1.35vw, 1.08rem);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   margin-bottom: 0.7rem;
   color: var(--text);
 }
@@ -635,24 +440,13 @@
   margin: 0;
   font-size: clamp(0.98rem, 1.4vw, 1.12rem);
   color: var(--muted);
-  line-height: 1.68;
+  line-height: 1.7;
 }
 
 .techCol li::before {
   content: "• ";
+  color: var(--accent);
   font-weight: 700;
-}
-
-.techCol:nth-child(1) li::before {
-  color: #a855f7;
-}
-
-.techCol:nth-child(2) li::before {
-  color: #3b82f6;
-}
-
-.techCol:nth-child(3) li::before {
-  color: #2dd4bf;
 }
 
 /* Visually hidden but available to screen readers */
