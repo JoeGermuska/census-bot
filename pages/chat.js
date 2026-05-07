@@ -169,6 +169,64 @@ function safeParse(content) {
   }
 }
 
+// Format a structured numeric value the same way the API does, so the big
+// stat card matches what the bot says.
+function formatStatValue(raw, unit) {
+  const num = parseFloat(raw);
+  if (!Number.isFinite(num) || num < 0) return "—";
+  switch (unit) {
+    case "currency":
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(num);
+    case "percent":
+      return `${parseFloat(num.toFixed(3))}%`;
+    case "years":
+      return `${parseFloat(num.toFixed(3))} yrs`;
+    case "minutes":
+      return `${parseFloat(num.toFixed(3))} min`;
+    case "number":
+    default:
+      return new Intl.NumberFormat("en-US").format(Math.round(num));
+  }
+}
+
+// ── Stat card (big number + label + place) ──────────────────────────────────
+// Rendered inside the assistant bubble whenever the response carries a
+// `structured` payload from the deterministic fast path.
+function StatCard({ structured }) {
+  if (!structured) return null;
+  const value = formatStatValue(structured.value, structured.unit);
+  const sourceLabel = structured.source
+    || `ACS ${structured.year} ${structured.dataset === "acs1" ? "1-Year" : "5-Year"} Estimates`;
+  const tables = Array.isArray(structured.tables) ? structured.tables : [];
+  return (
+    <div className={styles.statCardChat}>
+      <div className={styles.statCardLabel}>{structured.variable}</div>
+      <div className={styles.statCardValue}>{value}</div>
+      <div className={styles.statCardMeta}>
+        <span className={styles.statCardPlace}>{structured.place}</span>
+        <span className={styles.statCardDot}>·</span>
+        <span className={styles.statCardSource}>{sourceLabel}</span>
+      </div>
+      {tables.length > 0 && (
+        <div className={styles.statCardSources}>
+          <span className={styles.statCardSourcesLabel}>Source:</span>
+          {tables.map((t, i) => (
+            <a
+              key={t.tableId}
+              href={t.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.statCardTableLink}
+            >
+              Table {t.tableId}{i < tables.length - 1 ? "," : ""}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Icons ────────────────────────────────────────────────────────────────────
 function SendIcon() {
   return (
@@ -383,6 +441,7 @@ export default function ChatPage() {
           methodology: data.methodology || null,
           caveats: data.caveats || null,
           alternatives: Array.isArray(data.alternatives) ? data.alternatives : null,
+          structured: data.structured || null,
         }]);
       }
     } catch {
@@ -540,6 +599,8 @@ export default function ChatPage() {
                                 picked={msg.pickedLabel || null}
                                 onPick={(opt) => handleClarificationPick(i, opt)}
                               />
+                            ) : msg.structured ? (
+                              <StatCard structured={msg.structured} />
                             ) : (
                               renderMarkdown(msg.content)
                             )

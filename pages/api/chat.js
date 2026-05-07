@@ -4,9 +4,9 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { parseQuery, formatValue, detectAmbiguousMetric, STATE_FIPS } from "../../lib/censusTranslator";
-import { fetchCensusValue } from "../../lib/censusApi";
+import { fetchCensusValue, fetchCensusValueWithFallback } from "../../lib/censusApi";
 import { QUERY_TYPES, CURRENT_ACS_YEAR } from "../../lib/censusConstants";
-import { computeRateIfNeeded } from "../../lib/censusRates";
+import { computeRateIfNeeded, getRateDenominator } from "../../lib/censusRates";
 import { validateValue } from "../../lib/validateCensusData";
 import { findGeoCandidates, findZctaByZip, extractGeoPhrase, describeCandidate, geoParamsFromCandidate, candidateLabel } from "../../lib/geoCandidates";
 import fs from "fs";
@@ -400,7 +400,9 @@ function chartErrorPayload() {
 // ── Statistic mode fast path (no agentic loop) ──────────────────────────────
 
 const PERCENT_VARIABLES = new Set([
-  "B17001_002E", "B23025_005E", "B08136_001E", "B15003_022E", "B23025_004E",
+  "B17001_002E", "B23025_005E", "B08136_001E",
+  "B15003_022E", "B15003_017E", "B15003_025E",
+  "B23025_004E", "B23025_002E",
 ]);
 
 function needsVerification(numericValue, variableId, validationFailed) {
@@ -410,6 +412,37 @@ function needsVerification(numericValue, variableId, validationFailed) {
 function buildDeterministicSentence(place, variable, numericValue, format, year) {
   const formatted = formatValue(numericValue, format);
   return `${place} had a ${variable.toLowerCase()} of ${formatted} in ${year}.`;
+}
+
+// "B19013_001E" → "B19013"
+function tableIdOf(variableId) {
+  return String(variableId || "").split("_")[0];
+}
+
+// Build the source-link payload for a given primary variable. Includes the
+// denominator's table when it differs from the numerator's (e.g. mean commute,
+// where B08136 / B08303 come from two different tables).
+function buildSourceTables(variableId) {
+  const tables = new Set([tableIdOf(variableId)]);
+  const denom = getRateDenominator(variableId);
+  if (denom) tables.add(tableIdOf(denom));
+  return Array.from(tables).map((tableId) => ({
+    tableId,
+    url: `https://censusreporter.org/tables/${tableId}/`,
+  }));
+}
+
+// Friendly label for the dataset used: "ACS 2024 1-Year Estimates" or
+// "ACS 2020–2024 5-Year Estimates".
+function buildSourceLabel(dataset, year) {
+  const yr = Number(year);
+  if (dataset === "acs1") return `ACS ${yr} 1-Year Estimates`;
+  return `ACS ${yr - 4}–${yr} 5-Year Estimates`;
+}
+
+// Census API path for a dataset key, mapped from our short name.
+function datasetPath(dataset) {
+  return dataset === "acs1" ? "acs/acs1" : "acs/acs5";
 }
 
 async function verifySentence(numericValue, sentence) {
@@ -466,17 +499,27 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
     locationLabel = parsed.locationLabel;
   }
 
-  let rawValue;
+  let fetchResult;
   try {
-    rawValue = await fetchCensusValue(variable.id, geoParams, censusApiKey);
+    fetchResult = await fetchCensusValueWithFallback(variable.id, geoParams, censusApiKey, {
+      year: CURRENT_ACS_YEAR,
+      population: typeof pickedGeo?.population === "number" ? pickedGeo.population : null,
+      geoType: pickedGeo?.geoType || null,
+    });
   } catch (err) {
     return { error: String(err?.message || "Failed to fetch Census data.") };
   }
 
+  const rawValue = fetchResult.value;
+  const dataset = fetchResult.dataset;
+
   let numericValue = rawValue;
   let format = variable.format;
   try {
-    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey);
+    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey, {
+      year: CURRENT_ACS_YEAR,
+      dataset: datasetPath(dataset),
+    });
     if (rateResult) {
       numericValue = rateResult.value;
       format = rateResult.format;
@@ -486,6 +529,7 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
   }
 
   const formatted = formatValue(numericValue, format);
+  const sourceLabel = buildSourceLabel(dataset, CURRENT_ACS_YEAR);
   const sentence = `${locationLabel} had a ${variable.label.toLowerCase()} of ${formatted} in ${CURRENT_ACS_YEAR}.`;
 
   return {
@@ -497,6 +541,9 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
       year: Number(CURRENT_ACS_YEAR),
       unit: format,
       geoType: pickedGeo?.geoType || "place",
+      dataset,
+      source: sourceLabel,
+      tables: buildSourceTables(variable.id),
     },
   };
 }
@@ -666,12 +713,13 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
       const state = parts[1];
 
       if (city && state) {
+        const endYear = Number(CURRENT_ACS_YEAR);
         const trendResult = await runTrendTool(req, {
           city,
           state,
           metric: metricLabel,
-          startYear: 2018,
-          endYear: Number(CURRENT_ACS_YEAR),
+          startYear: endYear - 4,
+          endYear,
         });
 
         if (Array.isArray(trendResult)) {
@@ -716,20 +764,27 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
     : parsed.variable;
   const { geoParams, locationLabel } = parsed;
 
-  let rawValue;
+  let fetchResult;
   try {
-    rawValue = await fetchCensusValue(variable.id, geoParams, censusApiKey);
+    fetchResult = await fetchCensusValueWithFallback(variable.id, geoParams, censusApiKey, {
+      year: CURRENT_ACS_YEAR,
+    });
   } catch (err) {
     return res.status(200).json({ reply: null, error: String(err?.message || "Failed to fetch Census data."), warning: true });
   }
+
+  let rawValue = fetchResult.value;
+  let dataset = fetchResult.dataset;
 
   let validationFailed = false;
   const firstValidation = validateValue(variable.id, rawValue);
   if (!firstValidation.ok) {
     validationFailed = true;
     try {
-      const retryValue = await fetchCensusValue(variable.id, geoParams, censusApiKey);
-      const retryValidation = validateValue(variable.id, retryValue);
+      const retry = await fetchCensusValueWithFallback(variable.id, geoParams, censusApiKey, {
+        year: CURRENT_ACS_YEAR,
+      });
+      const retryValidation = validateValue(variable.id, retry.value);
       if (!retryValidation.ok) {
         return res.status(200).json({
           reply: null,
@@ -737,7 +792,8 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
           warning: true,
         });
       }
-      rawValue = retryValue;
+      rawValue = retry.value;
+      dataset = retry.dataset;
       validationFailed = false;
     } catch (retryErr) {
       return res.status(200).json({ reply: null, error: String(retryErr?.message || "Retry failed."), warning: true });
@@ -747,7 +803,10 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
   let numericValue = rawValue;
   let format = variable.format;
   try {
-    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey);
+    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey, {
+      year: CURRENT_ACS_YEAR,
+      dataset: datasetPath(dataset),
+    });
     if (rateResult) {
       numericValue = rateResult.value;
       format = rateResult.format;
@@ -776,6 +835,9 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
       place: locationLabel,
       year: Number(CURRENT_ACS_YEAR),
       unit: format,
+      dataset,
+      source: buildSourceLabel(dataset, CURRENT_ACS_YEAR),
+      tables: buildSourceTables(variable.id),
     },
     warnings,
     validated: !validationFailed,
