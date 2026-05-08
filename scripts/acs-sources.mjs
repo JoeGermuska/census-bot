@@ -60,6 +60,13 @@ export const PDF_SOURCES = [
     url: "https://www.census.gov/content/dam/Census/library/publications/2021/acs/acs_aian_handbook_2021.pdf",
   },
   {
+    id: "handbook-geography",
+    title: "Geography and the American Community Survey — What Data Users Need to Know",
+    kind: "handbook",
+    description: "Authoritative guide to ACS geography: hierarchy, place types (incorporated places, CDPs), ZCTAs, GEOIDs, and dataset availability by geo level.",
+    url: "https://www.census.gov/content/dam/Census/library/publications/2020/acs/acs_geography_handbook_2020.pdf",
+  },
+  {
     id: "design-methodology",
     title: "American Community Survey Design and Methodology Report (2024)",
     kind: "methodology",

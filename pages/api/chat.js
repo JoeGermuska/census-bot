@@ -4,7 +4,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { parseQuery, parseVariableOnly, formatValue, detectAmbiguousMetric, STATE_FIPS } from "../../lib/censusTranslator";
-import { fetchCensusValue, fetchCensusValueWithFallback } from "../../lib/censusApi";
+import { fetchCensusValueWithMOE, fetchCensusValueWithMOEAndFallback } from "../../lib/censusApi";
 import { QUERY_TYPES, CURRENT_ACS_YEAR } from "../../lib/censusConstants";
 import { computeRateIfNeeded, getRateDenominator } from "../../lib/censusRates";
 import { validateValue } from "../../lib/validateCensusData";
@@ -365,6 +365,23 @@ async function runAcsDocsTool(toolInput) {
   }
 }
 
+// Format a numeric MOE for display alongside an estimate. Percent rates have
+// MOEs in *percentage points*, not percent — using "pp" avoids conflating the
+// rate's scale with the MOE's scale.
+function formatMOE(numericMOE, format) {
+  if (numericMOE == null) return null;
+  const n = Math.abs(Number(numericMOE));
+  if (!Number.isFinite(n)) return null;
+  switch (format) {
+    case "currency": return `±${formatValue(n, "currency")}`;
+    case "number":   return `±${formatValue(n, "number")}`;
+    case "percent":  return `±${parseFloat(n.toFixed(2))} pp`;
+    case "years":    return `±${parseFloat(n.toFixed(2))} years`;
+    case "minutes":  return `±${parseFloat(n.toFixed(2))} minutes`;
+    default:         return `±${parseFloat(n.toFixed(2))}`;
+  }
+}
+
 async function runCensusTool(toolInput) {
   const { metric, city, state } = toolInput;
   const query = `${metric} in ${city}, ${state}`;
@@ -379,16 +396,19 @@ async function runCensusTool(toolInput) {
     if (parsed.error) return { error: parsed.error };
 
     const { variable, geoParams, locationLabel } = parsed;
-    const rawValue = await fetchCensusValue(variable.id, geoParams, censusApiKey);
+    const { value: rawValue, moe: rawMOE } = await fetchCensusValueWithMOE(variable.id, geoParams, censusApiKey);
 
-    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey);
-    const formattedValue = rateResult
-      ? formatValue(rateResult.value, rateResult.format)
-      : formatValue(rawValue, variable.format);
+    const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey, {
+      numeratorMOE: rawMOE,
+    });
+    const finalFormat = rateResult ? rateResult.format : variable.format;
+    const finalValue = rateResult ? rateResult.value : rawValue;
+    const finalMOE = rateResult ? rateResult.moe : rawMOE;
 
     return {
       metric: variable.label,
-      value: formattedValue,
+      value: formatValue(finalValue, finalFormat),
+      moe: formatMOE(finalMOE, finalFormat),
       location: locationLabel,
       source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
     };
@@ -699,7 +719,7 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
 
   let fetchResult;
   try {
-    fetchResult = await fetchCensusValueWithFallback(variable.id, geoParams, censusApiKey, {
+    fetchResult = await fetchCensusValueWithMOEAndFallback(variable.id, geoParams, censusApiKey, {
       year: CURRENT_ACS_YEAR,
       population: typeof pickedGeo?.population === "number" ? pickedGeo.population : null,
       geoType: pickedGeo?.geoType || null,
@@ -709,17 +729,21 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
   }
 
   const rawValue = fetchResult.value;
+  const rawMOE = fetchResult.moe;
   const dataset = fetchResult.dataset;
 
   let numericValue = rawValue;
+  let numericMOE = rawMOE;
   let format = variable.format;
   try {
     const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey, {
       year: CURRENT_ACS_YEAR,
       dataset: datasetPath(dataset),
+      numeratorMOE: rawMOE,
     });
     if (rateResult) {
       numericValue = rateResult.value;
+      numericMOE = rateResult.moe;
       format = rateResult.format;
     }
   } catch {
@@ -727,13 +751,18 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
   }
 
   const formatted = formatValue(numericValue, format);
+  const formattedMOE = formatMOE(numericMOE, format);
   const sourceLabel = buildSourceLabel(dataset, CURRENT_ACS_YEAR);
-  const sentence = `${locationLabel} had a ${variable.label.toLowerCase()} of ${formatted} in ${CURRENT_ACS_YEAR}.`;
+  const sentence = formattedMOE
+    ? `${locationLabel} had a ${variable.label.toLowerCase()} of ${formatted} (${formattedMOE}) in ${CURRENT_ACS_YEAR}.`
+    : `${locationLabel} had a ${variable.label.toLowerCase()} of ${formatted} in ${CURRENT_ACS_YEAR}.`;
 
   return {
     reply: sentence,
     structured: {
       value: numericValue,
+      moe: numericMOE,
+      moeFormatted: formattedMOE,
       variable: variable.label,
       place: locationLabel,
       year: Number(CURRENT_ACS_YEAR),
@@ -1038,7 +1067,7 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
 
   let fetchResult;
   try {
-    fetchResult = await fetchCensusValueWithFallback(variable.id, geoParams, censusApiKey, {
+    fetchResult = await fetchCensusValueWithMOEAndFallback(variable.id, geoParams, censusApiKey, {
       year: CURRENT_ACS_YEAR,
     });
   } catch (err) {
@@ -1058,6 +1087,7 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
   }
 
   let rawValue = fetchResult.value;
+  let rawMOE = fetchResult.moe;
   let dataset = fetchResult.dataset;
 
   let validationFailed = false;
@@ -1065,7 +1095,7 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
   if (!firstValidation.ok) {
     validationFailed = true;
     try {
-      const retry = await fetchCensusValueWithFallback(variable.id, geoParams, censusApiKey, {
+      const retry = await fetchCensusValueWithMOEAndFallback(variable.id, geoParams, censusApiKey, {
         year: CURRENT_ACS_YEAR,
       });
       const retryValidation = validateValue(variable.id, retry.value);
@@ -1077,6 +1107,7 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
         });
       }
       rawValue = retry.value;
+      rawMOE = retry.moe;
       dataset = retry.dataset;
       validationFailed = false;
     } catch (retryErr) {
@@ -1085,14 +1116,17 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
   }
 
   let numericValue = rawValue;
+  let numericMOE = rawMOE;
   let format = variable.format;
   try {
     const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey, {
       year: CURRENT_ACS_YEAR,
       dataset: datasetPath(dataset),
+      numeratorMOE: rawMOE,
     });
     if (rateResult) {
       numericValue = rateResult.value;
+      numericMOE = rateResult.moe;
       format = rateResult.format;
     }
   } catch {
@@ -1102,17 +1136,22 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
   const warnings = [];
   if (validationFailed) warnings.push("Data required a retry — treat with caution.");
 
+  const formattedMOE = formatMOE(numericMOE, format);
   let sentence = buildDeterministicSentence(locationLabel, variable.label, numericValue, format, CURRENT_ACS_YEAR);
+  if (formattedMOE) sentence = sentence.replace(/\.$/, ` (${formattedMOE}).`);
 
   if (needsVerification(numericValue, variable.id, validationFailed)) {
     const verified = await verifySentence(numericValue, sentence);
     if (!verified) {
       sentence = buildDeterministicSentence(locationLabel, variable.label, numericValue, format, CURRENT_ACS_YEAR);
+      if (formattedMOE) sentence = sentence.replace(/\.$/, ` (${formattedMOE}).`);
     }
   }
 
   const structured = {
     value: numericValue,
+    moe: numericMOE,
+    moeFormatted: formattedMOE,
     variable: variable.label,
     place: locationLabel,
     year: Number(CURRENT_ACS_YEAR),

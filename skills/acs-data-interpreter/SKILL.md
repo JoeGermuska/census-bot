@@ -48,6 +48,47 @@ ACS tables report counts (estimates). For percentages:
 - Otherwise: `percent = (estimate / universe_total) * 100`
 - Example: Rent-burdened share = `B25070_010E / B25070_001E * 100`
 
+### Rule 5: MOE for Derived Statistics
+
+When `lookup_census_data` returns both `value` and `moe`, **always** include the MOE in your answer — that's how users gauge reliability. For derived rates (percent rates, mean commute time, etc.) the server pre-computes the MOE for you using these formulas:
+
+- **Proportion** (numerator ⊂ denominator — e.g. unemployment = unemployed / labor force):
+  `MOE_P = (1/X) · √(MOE_Y² − P² · MOE_X²)`
+  Fall back to the ratio formula if the radicand is negative (rare; very noisy small areas).
+- **Ratio** (numerator ⊄ denominator — e.g. mean commute = aggregate minutes / workers):
+  `MOE_R = (1/X) · √(MOE_Y² + R² · MOE_X²)`
+- **Sum** (combining estimates — e.g. total renters across age brackets):
+  `MOE_sum = √(MOE_1² + MOE_2² + … + MOE_n²)`
+
+A percent rate's MOE is in **percentage points**, not percent. Display it as "±0.8 pp" or "±0.8 percentage points" — never "±0.8%". Saying "unemployment rate 4.2% ±0.8%" conflates the rate's unit with the MOE's unit and is technically wrong.
+
+---
+
+## Suppression & Reliability
+
+### Coefficient of variation (CV) rules of thumb
+`CV = MOE / (1.645 × estimate)` — the 1.645 converts the 90% CI MOE into a standard error.
+
+- **CV < 12%** → reliable; use the number directly.
+- **CV 12–40%** → caveat in narrative ("this estimate has a wide margin of error").
+- **CV > 40%** → don't lead with the number. Suggest a larger geography or warn the user the estimate is unreliable.
+
+CV is a more rigorous version of Rule 1's "MOE as % of estimate" threshold; both give similar answers in practice.
+
+### When to prefer 5-year over 1-year
+- Geography population < 65,000 → 1-year isn't published; 5-year is the only option.
+- 1-year MOE > 30% of estimate → 5-year usually has tighter MOE; prefer it.
+- Trend questions crossing 2020 → 5-year smooths the COVID-era single-year spike.
+- Small subgroup (e.g. one race × one age bracket × one place) → 5-year reduces sampling variance.
+
+### Why an estimate might be missing
+The Bureau suppresses a value when:
+- Sample size in the cell is too small (typical floor: ~50 unweighted cases).
+- Disclosure rules would let an individual be identified.
+- The value is top-coded (income or age ceilings) — returned as sentinel `-333333333`.
+
+When a sentinel comes back, the validation layer flags it with a *specific* reason. Surface that reason to the user (e.g. "this estimate was suppressed for disclosure protection"), not a generic "data unavailable."
+
 ---
 
 ## Inflation Adjustment
