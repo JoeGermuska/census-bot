@@ -16,48 +16,63 @@ export default function About() {
           <h1 className={`${landing.title} ${landing.aboutTitle}`}>
             <span className={landing.titleGradient}>About CensusBot</span>
           </h1>
-          <p className={landing.lead}>
-            Explore U.S. community data with simple questions.
-          </p>
         </header>
 
         <section className={`${landing.sectionCard} ${landing.sectionCardOverview}`}>
           <h2 className={`${landing.sectionHeading} ${landing.sectionHeadingOverview}`}>Overview</h2>
-          <p className={landing.sectionBody}>CensusBot turns plain-English questions into Census data results.</p>
+          <p className={landing.sectionBody}>
+            CensusBot is an independent project that makes data from the American Community
+            Survey (ACS) easier to access and interpret. It translates everyday questions
+            about U.S. communities into structured queries against the U.S. Census Bureau&rsquo;s
+            public data, and presents the results with clear context, margins of error, and
+            optional visualizations. CensusBot is unaffiliated with the U.S. Census Bureau.
+          </p>
+          <p className={`${landing.sectionBody} ${landing.sectionBodySpaced}`}>
+            The site supports three primary workflows:
+          </p>
           <ul className={landing.bulletList}>
-            <li>Pick a metric and location</li>
-            <li>Get clear results and optional charts</li>
+            <li>Selecting a metric and location through a guided lookup wizard.</li>
+            <li>Asking free-form questions in plain English and receiving cited results.</li>
+            <li>Tracking how a metric has changed over time with charts and trend summaries.</li>
           </ul>
-          <p className={`${landing.sectionBody} ${landing.sectionBodySpaced}`}>Use it to:</p>
-          <ul className={landing.bulletList}>
-            <li>Compare places</li>
-            <li>Track changes over time</li>
-            <li>Find relevant ACS fields</li>
-          </ul>
+          <p className={`${landing.sectionBody} ${landing.sectionBodySpaced}`}>
+            CensusBot is intended to help journalists, students, researchers, and the
+            general public quickly find and contextualize community-level statistics
+            without needing to navigate the Census Bureau&rsquo;s underlying variable tables.
+          </p>
         </section>
 
         <section className={`${landing.sectionCard} ${landing.sectionCardTech}`}>
           <h2 className={`${landing.sectionHeading} ${landing.sectionHeadingTech}`}>Tech Stack</h2>
-          <div className={landing.techGrid}>
+          <p className={landing.sectionBody}>
+            CensusBot is a Next.js application that fetches data server-side from the U.S.
+            Census Bureau and uses Anthropic&rsquo;s Claude models to interpret natural-language
+            questions. All data requests are made on the server, and no API keys are exposed
+            to the browser.
+          </p>
+          <div className={`${landing.techGrid} ${landing.sectionBodySpaced}`}>
             <div className={landing.techCol}>
               <h3>Frontend</h3>
               <ul>
-                <li>Next.js</li>
+                <li>Next.js (Pages Router)</li>
                 <li>React</li>
+                <li>Recharts for visualizations</li>
               </ul>
             </div>
             <div className={landing.techCol}>
               <h3>Design</h3>
               <ul>
-                <li>Light/Dark Modes</li>
-                <li>High-Contrast Accents</li>
+                <li>Light and dark themes</li>
+                <li>Responsive, accessible layout</li>
+                <li>High-contrast accent colors</li>
               </ul>
             </div>
             <div className={landing.techCol}>
-              <h3>Data</h3>
+              <h3>Data &amp; AI</h3>
               <ul>
-                <li>Census Bureau API</li>
-                <li>Server-Side API</li>
+                <li>U.S. Census Bureau ACS API</li>
+                <li>Server-side query routing</li>
+                <li>Anthropic Claude for language understanding</li>
               </ul>
             </div>
           </div>

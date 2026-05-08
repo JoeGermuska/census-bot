@@ -59,7 +59,7 @@ export default function Home() {
                   ))}
                 </div>
                 <div className={landing.quickstartFoot}>
-                  <span>Browse all 40+ ACS metrics</span>
+                  <span>Browse all 37 ACS metrics</span>
                   <Link href="/explore">All metrics →</Link>
                 </div>
               </section>
@@ -91,7 +91,7 @@ export default function Home() {
             </div>
 
             <footer className={landing.footerNote}>
-              Data Source: U.S. Census Bureau, American Community Survey (5-Year Estimates)
+              Data Source: U.S. Census Bureau, American Community Survey (1-Year and 5-Year Estimates, 2024)
             </footer>
           </div>
         </div>

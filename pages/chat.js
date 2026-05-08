@@ -1,5 +1,6 @@
 // pages/chat.js — Ask Question: Claude-powered Census chatbot
 import { Fragment, useState, useRef, useEffect } from "react";
+import { useRouter } from "next/router";
 import Head from "next/head";
 import SiteLayout from "../components/SiteLayout";
 import TrendChart from "../components/TrendChart";
@@ -241,6 +242,168 @@ function SourceFooter({ source, metric, place }) {
 // ── Stat card (big number + label + place) ──────────────────────────────────
 // Rendered inside the assistant bubble whenever the response carries a
 // `structured` payload from the deterministic fast path.
+// Shared methodology panel body — same content rendered both inside StatCard's
+// "More information" disclosure and inside each SourceTrail row's disclosure.
+function MethodologyPanel({ tableInfo, moeMethodology, nuances, methodology }) {
+  const hasContent =
+    !!tableInfo || !!moeMethodology || (Array.isArray(nuances) && nuances.length > 0) || !!methodology;
+  if (!hasContent) return null;
+  return (
+    <div className={styles.statCardMethBody}>
+      {tableInfo && (
+        <div className={styles.statCardMethPassage}>
+          <div className={styles.statCardMethHeader}>
+            Table {tableInfo.tableId} — {tableInfo.concept || tableInfo.kindLabel}
+          </div>
+          {tableInfo.universe && (
+            <p className={styles.statCardMethText}>
+              <strong>Universe:</strong> {tableInfo.universe}
+            </p>
+          )}
+          {Array.isArray(tableInfo.releases) && tableInfo.releases.length > 0 && (
+            <p className={styles.statCardMethText}>
+              <strong>Released in:</strong>{" "}
+              {tableInfo.releases.map(r => r === "acs5" ? "5-Year" : "1-Year").join(", ")}
+            </p>
+          )}
+          <span className={styles.statCardMethCite}>
+            — {tableInfo.catalogSource || "Local ACS table catalog"}
+          </span>
+        </div>
+      )}
+      {moeMethodology && (
+        <div className={styles.statCardMethPassage}>
+          <div className={styles.statCardMethHeader}>How the margin of error was calculated</div>
+          <p className={styles.statCardMethText}>{moeMethodology.description}</p>
+          {moeMethodology.formula && (
+            <p className={styles.statCardMethText}>
+              <code>{moeMethodology.formula}</code>
+            </p>
+          )}
+          <span className={styles.statCardMethCite}>— {moeMethodology.sourceLabel}</span>
+        </div>
+      )}
+      {Array.isArray(nuances) && nuances.length > 0 && (
+        <ul className={styles.statCardNuanceList}>
+          {nuances.map((n, i) => (
+            <li key={i} className={styles.statCardNuanceItem}>
+              <span className={styles.statCardNuanceMark} aria-hidden>⚠</span>
+              <span>{n}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {methodology && (
+        <div className={styles.statCardMethPassage}>
+          <p className={styles.statCardMethText}>{methodology.text}</p>
+          {methodology.doc_url ? (
+            <a
+              href={methodology.doc_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={styles.statCardMethCite}
+            >
+              — {methodology.doc_title}
+              {methodology.page ? `, p. ${methodology.page}` : ""} ↗
+            </a>
+          ) : (
+            <span className={styles.statCardMethCite}>
+              — {methodology.doc_title}
+              {methodology.page ? `, p. ${methodology.page}` : ""}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Compact source row — one per stat source captured during the agentic loop.
+// Renders the place + variable + value summary, the source links, and a
+// per-source "More information" disclosure that uses the same MethodologyPanel
+// content as the StatCard's expanded body.
+function SourceTrailRow({ source }) {
+  const [open, setOpen] = useState(false);
+  if (!source || source.kind !== "stat") return null;
+  const value = formatStatValue(source.value, source.unit);
+  const sourceLabel = source.source
+    || `ACS ${source.year} ${source.dataset === "acs1" ? "1-Year" : "5-Year"} Estimates`;
+  const tables = Array.isArray(source.tables) ? source.tables : [];
+  const hasMethPanel =
+    !!source.tableInfo || !!source.moeMethodology
+    || (Array.isArray(source.nuances) && source.nuances.length > 0)
+    || !!source.methodology;
+
+  return (
+    <div className={styles.sourceTrailRow}>
+      <div className={styles.sourceTrailLine}>
+        <strong>{source.place}</strong>
+        {source.variable ? <> — {source.variable}: </> : ": "}
+        <strong>{value}</strong>
+        {source.moeFormatted && <span className={styles.sourceTrailMOE}> {source.moeFormatted}</span>}
+      </div>
+      <div className={styles.statCardSourceRow}>
+        <div className={styles.statCardSources}>
+          <span className={styles.statCardSourcesLabel}>Source:</span>
+          <SourceFooter source={sourceLabel} metric={source.variable} place={source.place} />
+          {tables.map((t, i) => (
+            <Fragment key={t.tableId}>
+              <span className={styles.statCardSep}>,</span>
+              <a
+                href={t.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.statCardTableLink}
+              >
+                Table {t.tableId}
+              </a>
+            </Fragment>
+          ))}
+        </div>
+        {hasMethPanel && (
+          <button
+            type="button"
+            className={styles.statCardMethBtn}
+            onClick={() => setOpen(o => !o)}
+            aria-expanded={open}
+          >
+            {open ? "Hide more information ▲" : "More information ▼"}
+          </button>
+        )}
+      </div>
+      {hasMethPanel && open && (
+        <div className={styles.statCardMethWrap}>
+          <MethodologyPanel
+            tableInfo={source.tableInfo}
+            moeMethodology={source.moeMethodology}
+            nuances={source.nuances}
+            methodology={source.methodology}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Sources trail — rendered below the prose bubble whenever Claude fetched
+// data via the tool path. Universal: works for single stats, multi-place
+// comparisons, and learn-mode answers that pulled data alongside docs.
+function SourceTrail({ sources }) {
+  if (!Array.isArray(sources) || sources.length === 0) return null;
+  const statSources = sources.filter(s => s.kind === "stat");
+  if (statSources.length === 0) return null;
+  return (
+    <div className={styles.sourceTrail}>
+      <div className={styles.sourceTrailHeader}>
+        Sources ({statSources.length})
+      </div>
+      {statSources.map((s, i) => (
+        <SourceTrailRow key={i} source={s} />
+      ))}
+    </div>
+  );
+}
+
 function StatCard({ structured }) {
   const [methOpen, setMethOpen] = useState(false);
   if (!structured) return null;
@@ -304,74 +467,21 @@ function StatCard({ structured }) {
           )}
         </div>
       )}
+      {/* Why 5-year? — surfaced when 1-year couldn't deliver, so the user
+          isn't left wondering why they got a less-current estimate. */}
+      {structured.dataset === "acs5" && structured.fallbackReason && (
+        <div className={styles.statCardFallback}>
+          <strong>Why 5-Year?</strong> {structured.fallbackReason}
+        </div>
+      )}
       {hasMethPanel && methOpen && (
         <div className={styles.statCardMethWrap}>
-          <div className={styles.statCardMethBody}>
-              {tableInfo && (
-                <div className={styles.statCardMethPassage}>
-                  <div className={styles.statCardMethHeader}>
-                    Table {tableInfo.tableId} — {tableInfo.concept || tableInfo.kindLabel}
-                  </div>
-                  {tableInfo.universe && (
-                    <p className={styles.statCardMethText}>
-                      <strong>Universe:</strong> {tableInfo.universe}
-                    </p>
-                  )}
-                  {Array.isArray(tableInfo.releases) && tableInfo.releases.length > 0 && (
-                    <p className={styles.statCardMethText}>
-                      <strong>Released in:</strong>{" "}
-                      {tableInfo.releases.map(r => r === "acs5" ? "5-Year" : "1-Year").join(", ")}
-                    </p>
-                  )}
-                  <span className={styles.statCardMethCite}>
-                    — {tableInfo.catalogSource || "Local ACS table catalog"}
-                  </span>
-                </div>
-              )}
-              {moeMethodology && (
-                <div className={styles.statCardMethPassage}>
-                  <div className={styles.statCardMethHeader}>How the margin of error was calculated</div>
-                  <p className={styles.statCardMethText}>{moeMethodology.description}</p>
-                  {moeMethodology.formula && (
-                    <p className={styles.statCardMethText}>
-                      <code>{moeMethodology.formula}</code>
-                    </p>
-                  )}
-                  <span className={styles.statCardMethCite}>— {moeMethodology.sourceLabel}</span>
-                </div>
-              )}
-              {nuances.length > 0 && (
-                <ul className={styles.statCardNuanceList}>
-                  {nuances.map((n, i) => (
-                    <li key={i} className={styles.statCardNuanceItem}>
-                      <span className={styles.statCardNuanceMark} aria-hidden>⚠</span>
-                      <span>{n}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {methodology && (
-                <div className={styles.statCardMethPassage}>
-                  <p className={styles.statCardMethText}>{methodology.text}</p>
-                  {methodology.doc_url ? (
-                    <a
-                      href={methodology.doc_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={styles.statCardMethCite}
-                    >
-                      — {methodology.doc_title}
-                      {methodology.page ? `, p. ${methodology.page}` : ""} ↗
-                    </a>
-                  ) : (
-                    <span className={styles.statCardMethCite}>
-                      — {methodology.doc_title}
-                      {methodology.page ? `, p. ${methodology.page}` : ""}
-                    </span>
-                  )}
-                </div>
-              )}
-          </div>
+          <MethodologyPanel
+            tableInfo={tableInfo}
+            moeMethodology={moeMethodology}
+            nuances={nuances}
+            methodology={methodology}
+          />
         </div>
       )}
     </div>
@@ -595,6 +705,23 @@ export default function ChatPage() {
   const listRef = useRef(null);
   const textareaRef = useRef(null);
 
+  // Read ?prefill=... — used by the metric-graph "Look this up in the bot"
+  // button to jump directly into a partially-typed query.
+  const router = useRouter();
+  useEffect(() => {
+    if (!router.isReady) return;
+    const raw = router.query.prefill;
+    const prefill = Array.isArray(raw) ? raw[0] : raw;
+    if (!prefill) return;
+    setInput(prefill);
+    if (mode === null) setMode("statistic");
+    // Strip the param so a refresh doesn't keep re-prefilling.
+    router.replace("/chat", undefined, { shallow: true });
+    // Defer focus so the input has rendered.
+    requestAnimationFrame(() => textareaRef.current?.focus());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady]);
+
   // Fetch the doc directory once — we need it to resolve chunk_id → title in citations.
   useEffect(() => {
     let cancelled = false;
@@ -671,6 +798,7 @@ export default function ChatPage() {
           caveats: data.caveats || null,
           alternatives: Array.isArray(data.alternatives) ? data.alternatives : null,
           structured: data.structured || null,
+          sources: Array.isArray(data.sources) ? data.sources : null,
         }]);
       }
     } catch {
@@ -823,6 +951,9 @@ export default function ChatPage() {
                               })()
                           ) : (
                             msg.content
+                          )}
+                          {msg.role === "assistant" && !isTrendChart && !isClarification && !msg.structured && Array.isArray(msg.sources) && msg.sources.length > 0 && (
+                            <SourceTrail sources={msg.sources} />
                           )}
                           {msg.role === "assistant" && !isTrendChart && !isClarification && msg.alternatives && msg.alternatives.length > 0 && (
                             <AlternativesBlock

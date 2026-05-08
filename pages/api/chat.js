@@ -13,7 +13,6 @@ import { findGeoCandidates, findZctaByZip, extractGeoPhrase, describeCandidate, 
 import { searchAcsDocs } from "../../lib/acsRag";
 import { buildNuanceBanners, buildMethodologyQuery } from "../../lib/acsNuances";
 import { validateVariableClaim } from "../../lib/acsVariableMetadata";
-import { buildDerivedAltChipPayload } from "../../lib/acsAlternativesLoader";
 import fs from "fs";
 import path from "path";
 
@@ -504,6 +503,12 @@ async function runAcsVariableTool(toolInput) {
   let geoParams = null;
   let locationLabel = null;
 
+  // Carry the picked geo's population/geoType into the dataset-fallback fetcher
+  // so we can prefer ACS 1-year for places ≥ 65k pop. parseQuery doesn't surface
+  // these; only findGeoCandidates does.
+  let pickedPopulation = null;
+  let pickedGeoType = null;
+
   try {
     const parsed = parseQuery(queryStr);
     if (!parsed.error && parsed.geoParams) {
@@ -535,8 +540,11 @@ async function runAcsVariableTool(toolInput) {
             })),
           };
         }
-        geoParams = geoParamsFromCandidate(candidates[0]);
-        locationLabel = candidateLabel(candidates[0]);
+        const picked = candidates[0];
+        geoParams = geoParamsFromCandidate(picked);
+        locationLabel = candidateLabel(picked);
+        pickedPopulation = typeof picked.population === "number" ? picked.population : null;
+        pickedGeoType = picked.geoType || null;
       }
     } catch {
       // candidate lookup failed — fall through to "couldn't resolve" error
@@ -552,13 +560,24 @@ async function runAcsVariableTool(toolInput) {
   const parsed = { geoParams, locationLabel };
 
   try {
-    const rawValue = await fetchCensusValue(variable_id, parsed.geoParams, censusApiKey);
-    console.log(`[acs-var] fetched ${variable_id} → "${rawValue}" (geoParams=${JSON.stringify(parsed.geoParams)})`);
+    // Always prefer ACS 1-year; fall back to 5-year only when 1-year truly
+    // can't deliver. Returns { value, moe, dataset, year, fallbackReason }
+    // where fallbackReason explains the specific cause when dataset=="acs5".
+    const fetchResult = await fetchCensusValueWithMOEAndFallback(
+      variable_id, parsed.geoParams, censusApiKey,
+      { year: CURRENT_ACS_YEAR, population: pickedPopulation, geoType: pickedGeoType }
+    );
+    const rawValue = fetchResult.value;
+    const numericMOE = fetchResult.moe == null ? null : parseFloat(fetchResult.moe);
+    const dataset = fetchResult.dataset; // "acs1" or "acs5"
+    const fallbackReason = fetchResult.fallbackReason || null;
+    console.log(`[acs-var] fetched ${variable_id} → "${rawValue}" (dataset=${dataset}, geoParams=${JSON.stringify(parsed.geoParams)})`);
     let numericValue = parseFloat(rawValue);
 
-    // Optional denominator division for share-of queries.
+    // Optional denominator division for share-of queries — match the source dataset.
     if (share_of_variable_id && /^[A-Z]\d+_\d+[A-Z]?$/.test(String(share_of_variable_id).trim())) {
-      const denom = await fetchCensusValue(share_of_variable_id, parsed.geoParams, censusApiKey);
+      const denomDataset = dataset === "acs1" ? "acs/acs1" : "acs/acs5";
+      const denom = await fetchCensusValue(share_of_variable_id, parsed.geoParams, censusApiKey, CURRENT_ACS_YEAR, denomDataset);
       const denomNum = parseFloat(denom);
       if (Number.isFinite(denomNum) && denomNum > 0) {
         numericValue = (numericValue / denomNum) * 100;
@@ -572,31 +591,37 @@ async function runAcsVariableTool(toolInput) {
 
     const formatted = formatValue(numericValue, share_of_variable_id ? "percent" : unit);
 
-    // Auto-derive alternative variables (race × Hispanic counterparts, income
-    // universe variants, etc.) from the metadata-derived alternatives map.
-    // Empty when the derive script hasn't been run or no peers exist.
-    let derivedAlts = null;
-    try {
-      derivedAlts = await buildDerivedAltChipPayload(
-        variable_id,
-        label,
-        share_of_variable_id ? "percent" : unit,
-        `${label} in ${city ? `${city}, ` : ""}${state}`,
-      );
-    } catch (e) {
-      console.warn("[acs-var] alt derivation failed:", e.message);
-    }
+    const finalUnit = share_of_variable_id ? "percent" : unit;
+    const sourceLabel = buildSourceLabel(dataset, CURRENT_ACS_YEAR);
 
     return {
       metric: label,
       value: formatted,
       raw_value: numericValue,
-      unit: share_of_variable_id ? "percent" : unit,
+      unit: finalUnit,
+      moe: numericMOE,
       table_id,
       location: parsed.locationLabel,
-      source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
+      source: `${sourceLabel}, U.S. Census Bureau`,
+      dataset,
+      ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
       ...(validationWarning ? { validation_warning: validationWarning } : {}),
-      ...(derivedAlts ? { derived_alternatives: derivedAlts } : {}),
+      // Stripped before being forwarded to Claude — see runCensusTool.
+      _sourceEntry: {
+        kind: "stat",
+        variableId: variable_id,
+        variable: label,
+        place: parsed.locationLabel,
+        year: Number(CURRENT_ACS_YEAR),
+        dataset,
+        value: numericValue,
+        moe: numericMOE,
+        moeFormatted: null,
+        unit: finalUnit,
+        source: `${sourceLabel}, U.S. Census Bureau`,
+        ...(fallbackReason ? { fallbackReason } : {}),
+        tables: [{ tableId: table_id, url: `https://censusreporter.org/tables/${table_id}/` }],
+      },
     };
   } catch (err) {
     console.log(`[acs-var] FETCH ERROR: ${String(err?.message || err)}`);
@@ -655,12 +680,31 @@ async function runCensusTool(toolInput) {
     const finalValue = rateResult ? rateResult.value : rawValue;
     const finalMOE = rateResult ? rateResult.moe : rawMOE;
 
+    // The `_sourceEntry` field is stripped before the result is forwarded to
+    // Claude — it carries the raw, structured form of this fetch so the
+    // chat handler can attach it to the response's `sources` trail. This is
+    // how multi-place / Claude-mediated queries get the same "More info"
+    // grounding panels the deterministic single-stat path already gets.
     return {
       metric: variable.label,
       value: formatValue(finalValue, finalFormat),
       moe: formatMOE(finalMOE, finalFormat),
       location: locationLabel,
       source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
+      _sourceEntry: {
+        kind: "stat",
+        variableId: variable.id,
+        variable: variable.label,
+        place: locationLabel,
+        year: Number(CURRENT_ACS_YEAR),
+        dataset: "acs5",
+        value: parseFloat(finalValue),
+        moe: finalMOE != null ? parseFloat(finalMOE) : null,
+        moeFormatted: formatMOE(finalMOE, finalFormat),
+        unit: finalFormat,
+        source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
+        tables: buildSourceTables(variable.id),
+      },
     };
   } catch (err) {
     // Ensure the error message is always a plain string — avoids JSON.stringify issues
@@ -1075,6 +1119,7 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
   const rawValue = fetchResult.value;
   const rawMOE = fetchResult.moe;
   const dataset = fetchResult.dataset;
+  const fallbackReason = fetchResult.fallbackReason || null;
 
   let numericValue = rawValue;
   let numericMOE = rawMOE;
@@ -1115,6 +1160,7 @@ async function performPickedLookup({ pickedGeo, pickedMetric, userMsg }) {
       dataset,
       source: sourceLabel,
       tables: buildSourceTables(variable.id),
+      ...(fallbackReason ? { fallbackReason } : {}),
     },
   };
 }
@@ -1287,6 +1333,13 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
   const { pickedGeo = null, pickedMetric = null } = opts;
   const skipMetricCheck = !!pickedMetric;
 
+  // Strip the "[Picked X] ..." chip prefix BEFORE any geo / metric extraction.
+  // The prefix's label can contain " in " (e.g. "Income in the past 12 months below
+  // poverty level"), which would otherwise hijack extractGeoPhrase's first-" in "
+  // split and resolve the wrong location. The prefix is only there for display;
+  // pickedMetric/pickedGeo carry the actual override.
+  userMsg = stripPickedPrefix(userMsg);
+
   // Detect ambiguity but DO NOT halt — we'll always run the best-guess lookup
   // and surface the other interpretations as clickable alternatives.
   const ambiguity = await detectAlternatives(userMsg, { skipMetricCheck });
@@ -1309,23 +1362,11 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
     if (p) alternatives.push(p);
   }
 
-  // Derived alternatives — auto-discovered cross-table peers (e.g. race-alone
-  // <-> race-non-Hispanic, household income <-> family income) from the
-  // metadata-derived map. Skipped when a hand-written ambiguity bucket already
-  // covered the metric, to avoid duplicate chip rows.
-  if (activeMetric?.variableId && !ambiguity.metric) {
-    try {
-      const derived = await buildDerivedAltChipPayload(
-        activeMetric.variableId,
-        activeMetric.label || "this metric",
-        activeMetric.format || "number",
-        userMsg,
-      );
-      if (derived) alternatives.push(derived);
-    } catch (e) {
-      console.warn("[fast-path] derived alt failed:", e.message);
-    }
-  }
+  // Note: previously this branch pushed auto-derived "related measures" chips
+  // for any resolved variable (race × Hispanic, income variants, etc.). Removed
+  // by user request — chips should only surface when there's a GENUINE risk
+  // the user misunderstood the stat (i.e. the hand-written AMBIGUOUS_METRICS
+  // buckets above and the geo-candidate chips).
 
   const altsField = alternatives.length > 0 ? { alternatives } : {};
 
@@ -1393,7 +1434,10 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
         || activeMetric?.variableId
         || parseVariableOnly(userMsg)?.id;
       await attachNuancesAndMethodology(result.structured, variableId);
-      return res.status(200).json({ ...result, ...altsField });
+      return res.status(200).json({
+        ...result,
+        ...altsField,
+      });
     }
     if (result?.error) {
       return res.status(200).json({ reply: null, error: result.error, warning: true });
@@ -1448,6 +1492,7 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
   let rawValue = fetchResult.value;
   let rawMOE = fetchResult.moe;
   let dataset = fetchResult.dataset;
+  let fallbackReason = fetchResult.fallbackReason || null;
 
   let validationFailed = false;
   const firstValidation = validateValue(variable.id, rawValue);
@@ -1468,6 +1513,7 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
       rawValue = retry.value;
       rawMOE = retry.moe;
       dataset = retry.dataset;
+      fallbackReason = retry.fallbackReason || null;
       validationFailed = false;
     } catch (retryErr) {
       return res.status(200).json({ reply: null, error: String(retryErr?.message || "Retry failed."), warning: true });
@@ -1518,6 +1564,7 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
     dataset,
     source: buildSourceLabel(dataset, CURRENT_ACS_YEAR),
     tables: buildSourceTables(variable.id),
+    ...(fallbackReason ? { fallbackReason } : {}),
   };
   await attachNuancesAndMethodology(structured, variable.id);
 
@@ -1573,6 +1620,11 @@ export default async function handler(req, res) {
     let currentMessages = messages;
     let finalReply = null;
     const trendSeries = []; // collected across tool calls for multi-line comparisons
+    // Sources trail: every successful stat fetch during the agentic loop is
+    // captured here so the response can surface "More information / sourcing"
+    // grounding regardless of which UI shape is rendered (single StatCard,
+    // multi-place comparison prose, learn-mode essay, etc.).
+    const sources = [];
     // Captures the most recent successful free-form variable lookup so we can
     // surface it as a StatCard alongside Claude's text reply. If Claude calls
     // the tool more than once in a turn, the last successful result wins.
@@ -1672,21 +1724,35 @@ export default async function handler(req, res) {
                   place: result.location,
                   year: Number(CURRENT_ACS_YEAR),
                   unit: result.unit,
+                  moe: result.moe,
+                  dataset: result.dataset,
                   source: result.source,
                   tables: [{
                     tableId: result.table_id,
                     url: `https://censusreporter.org/tables/${result.table_id}/`,
                   }],
+                  ...(result.fallback_reason ? { fallbackReason: result.fallback_reason } : {}),
                   ...(result.validation_warning ? { validation_warning: result.validation_warning } : {}),
                 };
-                if (result.derived_alternatives) {
-                  acsVariableAlternatives = result.derived_alternatives;
-                }
+                // Attach RAG-pulled methodology + nuance banners so the StatCard
+                // shows the "More information" carrot for free-form variables too.
+                // Symmetry with the curated fast path; the curated path runs this
+                // automatically via attachNuancesAndMethodology in performPickedLookup
+                // and the standard parseQuery path.
+                await attachNuancesAndMethodology(acsVariableStructured, block.input?.variable_id);
               }
             } else if (block.name === ACS_DOCS_TOOL.name) {
               result = await runAcsDocsTool(block.input);
             } else {
               result = { error: `Unsupported tool: ${block.name}` };
+            }
+            // Capture the source entry attached by the runner (if any) into
+            // the loop-level trail, then strip it before forwarding to Claude
+            // so it doesn't bloat the tool_result payload Claude has to read.
+            if (result && result._sourceEntry) {
+              sources.push(result._sourceEntry);
+              const { _sourceEntry, ...claudeFacing } = result;
+              result = claudeFacing;
             }
             // Safely serialize — catch any unexpected stringify failure
             let content;
@@ -1737,13 +1803,25 @@ export default async function handler(req, res) {
       }
     }
 
+    // Enrich each stat source in the trail with table-catalog grounding,
+    // MOE methodology, and the deterministic nuance banners — same enrichment
+    // the deterministic fast path applies to its single structured payload.
+    // Run in parallel since each source's lookups are independent.
+    if (sources.length > 0) {
+      await Promise.all(sources.map((s) => {
+        if (s.kind !== "stat" || !s.variableId) return Promise.resolve();
+        return attachNuancesAndMethodology(s, s.variableId);
+      }));
+    }
+    const sourcesField = sources.length > 0 ? { sources } : {};
+
     if (visualizationRequest) {
       if (trendSeries.length > 0) {
         const metricLabel = inferTrendMetricLabel(initialUserMsg);
         const payload = buildTrendChartPayload(trendSeries, metricLabel);
-        return res.status(200).json({ reply: JSON.stringify(payload) });
+        return res.status(200).json({ reply: JSON.stringify(payload), ...sourcesField });
       }
-      return res.status(200).json({ reply: JSON.stringify(chartErrorPayload()) });
+      return res.status(200).json({ reply: JSON.stringify(chartErrorPayload()), ...sourcesField });
     }
 
     // For statistic mode, parse structured sections from the reply
@@ -1762,6 +1840,7 @@ export default async function handler(req, res) {
           caveats,
           ...(acsVariableStructured ? { structured: acsVariableStructured } : {}),
           ...(acsVariableAlternatives ? { alternatives: [acsVariableAlternatives] } : {}),
+          ...sourcesField,
         });
       }
     }
@@ -1770,6 +1849,7 @@ export default async function handler(req, res) {
       reply: finalReply,
       ...(acsVariableStructured ? { structured: acsVariableStructured } : {}),
       ...(acsVariableAlternatives ? { alternatives: [acsVariableAlternatives] } : {}),
+      ...sourcesField,
     });
   } catch (err) {
     console.error("[chat] API error:", err);

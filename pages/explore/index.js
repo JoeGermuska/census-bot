@@ -268,7 +268,7 @@ export default function ExploreMetrics() {
                       </button>
                     </div>
                     <div className={ex.choiceList}>
-                      {group.metrics.map(({ key, label, Icon }) => {
+                      {group.metrics.map(({ key, label }) => {
                         const on = selected.has(key);
                         return (
                           <button
@@ -278,12 +278,9 @@ export default function ExploreMetrics() {
                             onClick={() => toggle(key)}
                             aria-pressed={on}
                           >
-                            <span className={ex.choiceCheck} aria-hidden="true">
-                              {on ? "✓" : "+"}
-                            </span>
-                            <span className={ex.choiceIcon}>
-                              <Icon />
-                            </span>
+                            {on && (
+                              <span className={ex.choiceCheck} aria-hidden="true">✓</span>
+                            )}
                             {label}
                           </button>
                         );
@@ -305,6 +302,12 @@ export default function ExploreMetrics() {
               Next →
             </button>
           </div>
+
+          <p className={ex.excludedNote}>
+            Not included: health insurance coverage, disability status, language spoken at home,
+            marital status and household composition, industry and occupation, computer and
+            internet access, vehicles available, year structure built, and migration/mobility.
+          </p>
         </div>
       </SiteLayout>
     </>
