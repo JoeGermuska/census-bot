@@ -19,7 +19,7 @@
 
 .hero {
   text-align: center;
-  margin-bottom: clamp(2.5rem, 6vw, 4.5rem);
+  margin-bottom: clamp(1.25rem, 2.5vw, 1.75rem);
 }
 
 .title {
@@ -28,7 +28,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
-  margin-bottom: clamp(1.15rem, 2.8vw, 1.7rem);
+  margin-bottom: clamp(0.65rem, 1.6vw, 1rem);
   color: var(--accent);
 }
 
@@ -50,8 +50,8 @@
   font-weight: 400;
   color: var(--text);
   max-width: min(46rem, 90vw);
-  margin: 0 auto 0.78rem;
-  line-height: 1.5;
+  margin: 0 auto 0.4rem;
+  line-height: 1.4;
 }
 
 .lead {
@@ -250,7 +250,7 @@
 }
 
 .footerNote {
-  margin-top: clamp(2.5rem, 5vw, 4rem);
+  margin-top: clamp(0.5rem, 1vw, 0.85rem);
   text-align: center;
   font-size: 0.78rem;
   color: var(--muted);
@@ -316,14 +316,14 @@
 /* About page */
 .aboutHero {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: clamp(1rem, 2vw, 1.5rem);
 }
 
 .sectionCard {
   border-radius: 14px;
-  padding: clamp(1.65rem, 3.5vw, 2.15rem) clamp(1.65rem, 3.5vw, 2.15rem) clamp(1.45rem, 3vw, 1.85rem);
+  padding: clamp(1.25rem, 2.5vw, 1.65rem) clamp(1.5rem, 3vw, 1.85rem) clamp(1.1rem, 2.25vw, 1.45rem);
   background: var(--surface);
-  margin-bottom: 2rem;
+  margin-bottom: 0.85rem;
   border: 1px solid var(--border);
   transition: border-color 0.2s ease;
 }
@@ -340,11 +340,11 @@
 }
 
 .sectionHeading {
-  font-size: clamp(1.65rem, 4.2vw, 2.45rem);
+  font-size: clamp(1.4rem, 3.2vw, 1.85rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  margin-bottom: clamp(1.22rem, 2.55vw, 1.68rem);
+  margin-bottom: clamp(0.65rem, 1.4vw, 0.95rem);
   color: var(--accent);
 }
 
@@ -358,11 +358,18 @@
 .sectionBody {
   font-size: clamp(1.02rem, 1.45vw, 1.14rem);
   color: var(--text-dim);
-  line-height: 1.7;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.sectionBody + .sectionBody,
+.sectionBody + .bulletList,
+.bulletList + .sectionBody {
+  margin-top: 0.85rem;
 }
 
 .sectionBodySpaced {
-  margin-top: 1rem;
+  margin-top: 0.85rem;
 }
 
 .creditsBuilt {
@@ -393,10 +400,10 @@
 }
 
 .bulletList {
-  margin: 1rem 0 0 1.15rem;
+  margin: 0 0 0 1.15rem;
   color: var(--text-dim);
   font-size: clamp(1.02rem, 1.45vw, 1.14rem);
-  line-height: 1.72;
+  line-height: 1.55;
 }
 
 .bulletList li::marker {
@@ -458,9 +465,9 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.85rem;
   padding: 0 0.25rem;
-  margin-bottom: clamp(2.5rem, 5vw, 4rem);
+  margin-bottom: 0;
 }
 
 .quickstart {

@@ -37,3 +37,11 @@ docs/raw/
 .vercel
 .claude/worktrees/
 .claude/settings.local.json
+
+# Local-only metric-graph exploration page (kept on disk, not shipped).
+# Regenerate the layout via `node scripts/build-graph-layout.mjs` whenever
+# the underlying lib/acsAlternatives.json data changes.
+pages/test/metric-graph.js
+pages/api/graph-layout.js
+scripts/build-graph-layout.mjs
+lib/graphLayout.json

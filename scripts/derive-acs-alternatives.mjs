@@ -36,16 +36,36 @@ const OUT_PATH = resolve(PROJECT_ROOT, "lib/acsAlternatives.json");
 const MAX_ALTS_PER_VARIABLE = 5;
 
 // ── Load detailed-table variables (the B/C tables — where most data lives) ──
+// Restricted to ACS 5-year because that's the dataset the runtime queries
+// against by default. Including ACS-1-only tables (e.g. B02003) creates
+// chip alternatives that silently fail when clicked.
 async function loadDetailedVariables() {
   const files = await readdir(RAW_DIR);
   const detailedVarFiles = files.filter(
-    f => f.endsWith("__detailed__variables.json")
+    f => f.startsWith("acs5__") && f.endsWith("__detailed__variables.json")
   );
   if (detailedVarFiles.length === 0) {
-    throw new Error(`No detailed variables files found in ${RAW_DIR}. Run: npm run fetch:acs-tables`);
+    throw new Error(`No ACS5 detailed variables files found in ${RAW_DIR}. Run: npm run fetch:acs-tables`);
   }
 
-  const map = new Map(); // id → { id, label, concept, group, leaf, pathTokens, conceptTokens, releases }
+  // Load groups.json for the universe field — variables.json only has label /
+  // concept / group; the human-readable universe (e.g. "Population in
+  // households for whom poverty status is determined") only lives in groups.
+  const groupsFiles = files.filter(
+    f => f.startsWith("acs5__") && f.endsWith("__detailed__groups.json")
+  );
+  const universeByGroup = new Map();
+  for (const file of groupsFiles) {
+    const json = JSON.parse(await readFile(resolve(RAW_DIR, file), "utf8"));
+    for (const grp of json.groups || []) {
+      // Census API has a typo in the JSON: the field is "universe " (with
+      // trailing space) in some endpoints. Try both.
+      const u = grp["universe"] || grp["universe "] || "";
+      if (grp.name) universeByGroup.set(grp.name, String(u).trim());
+    }
+  }
+
+  const map = new Map(); // id → { id, label, concept, group, universe, leaf, pathTokens, conceptTokens, releases }
 
   for (const file of detailedVarFiles) {
     const release = file.split("__")[0]; // "acs5" or "acs1"
@@ -72,11 +92,13 @@ async function loadDetailedVariables() {
         .filter(Boolean);
       const leaf = pathTokens[pathTokens.length - 1] || "";
       const conceptTokens = tokenize(concept);
+      const universe = universeByGroup.get(group) || "";
       map.set(id, {
         id,
         label,
         concept,
         group,
+        universe,
         leaf,
         pathTokens,
         conceptTokens,

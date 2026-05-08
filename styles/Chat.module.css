@@ -17,10 +17,10 @@
 
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 10.5rem);
-  max-height: calc(100vh - 10.5rem);
+  height: calc(100vh - 7.5rem);
+  max-height: calc(100vh - 7.5rem);
   padding: 0;
-  margin: 0 auto;
+  margin: -1.25rem auto 0;
   max-width: 980px;
   width: 100%;
   font-family: inherit;
@@ -37,7 +37,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 0 0.75rem;
+  padding: 0.5rem 0 0.4rem;
   flex-shrink: 0;
 }
 
@@ -58,15 +58,17 @@
 }
 
 .title {
-  font-size: 1.35rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   color: var(--c-text);
+  margin: 0;
 }
 
 .subtitle {
   font-size: 0.82rem;
   color: var(--c-muted);
+  margin: 0;
 }
 
 .clearBtn {
@@ -91,11 +93,20 @@
 /* ── Mode tabs ──────────────────────────────────────────── */
 .modeTabs {
   display: flex;
-  gap: 0.45rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--c-border);
   flex-shrink: 0;
+}
+
+.modeTabsList {
+  display: flex;
+  gap: 0.45rem;
   flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .modeTab {
@@ -148,9 +159,32 @@
   scrollbar-color: var(--c-border) transparent;
 }
 
-/* ── Empty state — pure flex spacer, pushes input to bottom ─ */
+/* ── Empty state — centered welcome + suggestions ─────────── */
 .emptyState {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0;
+  min-height: 0;
+}
+
+.emptyStateInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-width: 640px;
+  width: 100%;
+}
+
+.emptyPrompt {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--c-muted);
+  text-align: center;
+  margin: 0;
+  letter-spacing: 0.01em;
 }
 
 .emptyIcon {
@@ -170,8 +204,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.55rem;
-  justify-content: flex-start;
-  margin-bottom: 0.75rem;
+  justify-content: center;
 }
 
 .suggestion {
@@ -453,7 +486,7 @@
 /* Wrapper that separates the message list from the ChatInputBox card. */
 .inputArea {
   flex-shrink: 0;
-  padding: 0.75rem 0 1.25rem;
+  padding: 0.5rem 0 0.25rem;
   border-top: 1px solid var(--c-border);
 }
 
@@ -462,15 +495,15 @@
 /* dvh accounts for mobile browser chrome (address bar hide/show) */
 @supports (height: 100dvh) {
   .chatPage {
-    height: calc(100dvh - 10.5rem);
-    max-height: calc(100dvh - 10.5rem);
+    height: calc(100dvh - 7.5rem);
+    max-height: calc(100dvh - 7.5rem);
   }
 }
 
 @media (max-width: 720px) {
   .chatPage {
-    height: calc(100vh - 15rem);
-    max-height: calc(100vh - 15rem);
+    height: calc(100vh - 12rem);
+    max-height: calc(100vh - 12rem);
   }
 
   .header {
@@ -478,7 +511,7 @@
   }
 
   .title {
-    font-size: 1.15rem;
+    font-size: 0.82rem;
   }
 
   .modeTabs {
@@ -831,6 +864,41 @@
   font-size: 0.78rem;
 }
 
+/* ── Source trail — rendered below the prose bubble for multi-source answers ── */
+.sourceTrail {
+  margin-top: 0.85rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--c-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.sourceTrailHeader {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+
+.sourceTrailRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.sourceTrailLine {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--c-text);
+}
+
+.sourceTrailMOE {
+  color: var(--c-muted);
+  font-size: 0.78rem;
+}
+
 .statCardSources {
   display: flex;
   flex-wrap: wrap;
@@ -1077,4 +1145,166 @@ a.statCardMethCite:hover {
 .sourcePage {
   color: var(--c-muted);
   font-weight: 400;
+}
+
+/* ── Metric Relations Web (radial node-link diagram) ───────────────────────── */
+.metricGraphWrap {
+  margin-top: 1rem;
+  padding: 0.85rem 0.75rem 0.55rem;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+}
+
+.metricGraphLabel {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  margin-bottom: 0.35rem;
+  padding-left: 0.4rem;
+}
+
+.metricGraphSvg {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: inherit;
+}
+
+/* ── Edges ── */
+.graphEdge {
+  stroke: var(--c-border-hover);
+  stroke-width: 1.5;
+  fill: none;
+}
+.edge_narrower-universe { stroke-dasharray: 4 4; }
+.edge_drill-down        { stroke: var(--c-accent); stroke-width: 1.8; }
+.edge_complement        { stroke-dasharray: 2 3; }
+.edge_alt-measure       { stroke: var(--c-border-hover); }
+.edge_broader-scope     { stroke: var(--c-border-hover); }
+
+.graphEdgeLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  background: var(--c-surface);
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+/* ── Central node ── */
+.graphCentralGroup { pointer-events: none; }
+
+.graphCentral {
+  fill: var(--c-accent);
+  stroke: var(--c-accent);
+  stroke-width: 2;
+}
+
+.graphCentralContent {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #fff;
+  padding: 0 4px;
+  pointer-events: none;
+}
+
+.graphCentralLabel {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.005em;
+  margin-bottom: 3px;
+}
+
+.graphCentralUniverse {
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+  opacity: 0.85;
+  font-style: italic;
+}
+
+/* ── Satellite (clickable) ── */
+.graphSatelliteGroup {
+  cursor: pointer;
+  transition: transform 0.18s ease;
+}
+.graphSatelliteGroup:hover .graphSatellite,
+.graphSatelliteGroup:focus-visible .graphSatellite {
+  fill: var(--c-accent-soft);
+  stroke: var(--c-accent);
+  stroke-width: 2;
+}
+.graphSatelliteGroup:focus-visible {
+  outline: none;
+}
+.graphSatelliteGroup:focus-visible .graphSatellite {
+  filter: drop-shadow(0 0 0 var(--c-accent));
+}
+
+.graphSatellite {
+  fill: var(--c-surface);
+  stroke: var(--c-border-hover);
+  stroke-width: 1.5;
+  transition: fill 0.18s ease, stroke 0.18s ease;
+}
+
+.graphSatelliteContent {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--c-text);
+  padding: 0 4px;
+  pointer-events: none;
+}
+
+.graphSatelliteLabel {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.18;
+  margin-bottom: 3px;
+}
+
+.graphSatelliteUniverse {
+  font-size: 8.5px;
+  color: var(--c-muted);
+  line-height: 1.2;
+  font-style: italic;
+}
+
+/* "Why 5-Year?" attribution shown when ACS 1-Year wasn't viable. */
+.statCardFallback {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: rgba(35, 120, 195, 0.06);
+  border-left: 2px solid var(--c-accent);
+  border-radius: 3px;
+  font-size: 0.78rem;
+  color: var(--c-text-dim);
+  line-height: 1.45;
+}
+
+.statCardFallback strong {
+  color: var(--c-accent);
+  font-weight: 700;
+  margin-right: 0.25rem;
 }

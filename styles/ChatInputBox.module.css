@@ -1,12 +1,16 @@
 /* styles/ChatInputBox.module.css */
 
-/* ── Container card ───────────────────────────────────────────────────────── */
+/* ── Container card — single-row pill ─────────────────────────────────────── */
 .inputBox {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border-radius: 14px;
+  padding: 0.4rem 0.55rem 0.4rem 0.95rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   overflow: visible;
 }
@@ -25,13 +29,10 @@
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
-/* ── Textarea area ────────────────────────────────────────────────────────── */
-.textareaWrap {
-  padding: 0.9rem 1rem 0.4rem;
-}
-
+/* ── Textarea ─────────────────────────────────────────────────────────────── */
 .textarea {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   background: transparent;
   border: none;
   outline: none;
@@ -39,11 +40,13 @@
   color: var(--text);
   font-size: 0.92rem;
   font-family: inherit;
-  line-height: 1.55;
-  min-height: 44px;
+  line-height: 1.5;
+  min-height: 32px;
   max-height: 160px;
   overflow-y: auto;
   display: block;
+  padding: 0.35rem 0;
+  align-self: center;
 }
 
 .textarea::placeholder {
@@ -61,25 +64,14 @@
   .textarea { font-size: 1rem; }
 }
 
-/* ── Toolbar row ──────────────────────────────────────────────────────────── */
-.toolbar {
-  display: flex;
+/* ── Right-side action group (Thinking / New Chat / Send) ────────────────── */
+.actions {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.6rem 0.75rem 0.6rem 1rem;
-  border-top: 1px solid var(--border);
-}
-
-:global(html[data-theme="dark"]) .toolbar {
-  border-color: rgba(255, 255, 255, 0.06);
-}
-
-.hint {
-  font-size: 0.76rem;
-  color: var(--text-dim);
-  opacity: 0.85;
-  white-space: nowrap;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  align-self: flex-end;
+  padding-bottom: 0.1rem;
 }
 
 /* "Thinking …" label shown while loading */
@@ -87,9 +79,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--muted);
   font-style: italic;
+  white-space: nowrap;
 }
 
 /* ── Animated typing dots ─────────────────────────────────────────────────── */
@@ -109,39 +102,57 @@
   background: var(--muted);
 }
 
-/* ── Send button ──────────────────────────────────────────────────────────── */
-.sendBtn {
+.newChatBtn {
   display: inline-flex;
   align-items: center;
-  gap: 0.42rem;
-  padding: 0.5rem 1rem;
-  border-radius: 9px;
-  border: none;
-  font-size: 0.84rem;
+  padding: 0.32rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.76rem;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  flex-shrink: 0;
-  transition: opacity 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
 }
 
-/* Active — purple pill */
-.sendBtnActive {
+.newChatBtn:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: var(--surface-2);
+}
+
+/* ── Send icon button (icon-only, like Claude) ───────────────────────────── */
+.sendIconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.sendIconBtnActive {
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 2px 12px var(--accent-glow);
 }
 
-/* Muted / disabled */
-.sendBtnMuted {
-  background: var(--surface-2);
+.sendIconBtnMuted {
+  background: transparent;
   color: var(--muted);
   cursor: not-allowed;
   opacity: 0.55;
 }
 
-:global(html[data-theme="dark"]) .sendBtnMuted {
-  background: rgba(255, 255, 255, 0.06);
+:global(html[data-theme="dark"]) .sendIconBtnMuted {
+  color: var(--text-dim);
 }
 
 /* Spinning loader icon */

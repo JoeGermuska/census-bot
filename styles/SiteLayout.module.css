@@ -29,17 +29,15 @@
     backdrop-filter 0.22s ease;
 }
 
-/* Subtle scrolled state — slightly translucent with blur */
+/* Solid scrolled state — opaque so content underneath isn't visible */
 .navScrolled {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface);
   border-bottom-color: var(--border);
   box-shadow: 0 4px 16px rgba(42, 35, 51, 0.05);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 :global(html[data-theme="dark"]) .navScrolled {
-  background: rgba(29, 24, 40, 0.7);
+  background: var(--surface);
   border-bottom-color: var(--border);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
 }

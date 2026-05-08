@@ -980,6 +980,17 @@
   background: transparent;
 }
 
+.excludedNote {
+  width: 100%;
+  max-width: 980px;
+  margin: 1.25rem auto 0;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  color: var(--muted);
+  text-align: center;
+  padding: 0 0.5rem;
+}
+
 /* ── Screen-reader only utility ── */
 .srOnly {
   position: absolute;

@@ -5,11 +5,11 @@
 
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2 } from "lucide-react";
+import { CornerDownLeft, Loader2 } from "lucide-react";
 import styles from "../styles/ChatInputBox.module.css";
 
 // ── Auto-resize textarea hook ──────────────────────────────────────────────
-function useAutoResize({ minHeight = 44, maxHeight = 160 } = {}) {
+function useAutoResize({ minHeight = 32, maxHeight = 160 } = {}) {
   const ref = useRef(null);
 
   const adjust = useCallback(() => {
@@ -66,12 +66,19 @@ function TypingDots() {
 // can call .focus() after sends or mode switches.
 
 const ChatInputBox = forwardRef(function ChatInputBox(
-  { value, onChange, onSend, loading = false, disabled = false, placeholder = "Ask a question…" },
+  {
+    value,
+    onChange,
+    onSend,
+    loading = false,
+    disabled = false,
+    placeholder = "Ask a question…",
+  },
   forwardedRef,
 ) {
   const [focused, setFocused] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const { ref: internalRef, adjust } = useAutoResize({ minHeight: 44, maxHeight: 160 });
+  const { ref: internalRef, adjust } = useAutoResize({ minHeight: 32, maxHeight: 160 });
 
   // Merge forwarded ref with internal ref
   const setRef = useCallback(
@@ -129,79 +136,62 @@ const ChatInputBox = forwardRef(function ChatInputBox(
         )}
       </AnimatePresence>
 
-      {/* Main input card */}
+      {/* Main input card — single-row pill */}
       <motion.div
         className={`${styles.inputBox} ${focused ? styles.inputBoxFocused : ""}`}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       >
-        {/* Textarea */}
-        <div className={styles.textareaWrap}>
-          <textarea
-            ref={setRef}
-            className={styles.textarea}
-            value={value}
-            onChange={(e) => {
-              onChange(e);
-              adjust();
-            }}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            placeholder={placeholder}
-            disabled={disabled || loading}
-            aria-label="Chat input"
-            rows={1}
-            style={{ overflow: "hidden" }}
-          />
-        </div>
+        <textarea
+          ref={setRef}
+          className={styles.textarea}
+          value={value}
+          onChange={(e) => {
+            onChange(e);
+            adjust();
+          }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder={placeholder}
+          disabled={disabled || loading}
+          aria-label="Chat input"
+          rows={1}
+          style={{ overflow: "hidden" }}
+        />
 
-        {/* Toolbar */}
-        <div className={styles.toolbar}>
-          {/* Loading status — shown inline in the toolbar */}
-          <AnimatePresence mode="wait">
-            {loading ? (
+        <div className={styles.actions}>
+          <AnimatePresence>
+            {loading && (
               <motion.span
                 key="thinking"
                 className={styles.thinkingLabel}
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -6 }}
-                transition={{ duration: 0.2 }}
-              >
-                Thinking <TypingDots />
-              </motion.span>
-            ) : (
-              <motion.span
-                key="hint"
-                className={styles.hint}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
+                aria-live="polite"
               >
-                Enter to send · Shift+Enter for new line
+                Thinking <TypingDots />
               </motion.span>
             )}
           </AnimatePresence>
 
-          {/* Send button */}
           <motion.button
             type="button"
             onClick={onSend}
             disabled={!canSend}
-            whileHover={canSend ? { scale: 1.04 } : {}}
-            whileTap={canSend ? { scale: 0.96 } : {}}
-            className={`${styles.sendBtn} ${canSend ? styles.sendBtnActive : styles.sendBtnMuted}`}
+            whileHover={canSend ? { scale: 1.06 } : {}}
+            whileTap={canSend ? { scale: 0.94 } : {}}
+            className={`${styles.sendIconBtn} ${canSend ? styles.sendIconBtnActive : styles.sendIconBtnMuted}`}
             aria-label="Send message"
           >
             {loading ? (
-              <Loader2 size={15} className={styles.spinnerIcon} />
+              <Loader2 size={16} className={styles.spinnerIcon} />
             ) : (
-              <Send size={15} />
+              <CornerDownLeft size={16} />
             )}
-            <span>Send</span>
           </motion.button>
         </div>
       </motion.div>

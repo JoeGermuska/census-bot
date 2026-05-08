@@ -874,6 +874,23 @@ export default function ChatPage() {
               <h1 className={styles.title}>Ask a Question</h1>
               <p className={styles.subtitle}>{activeMode?.description}</p>
             </div>
+          </div>
+
+          {/* Mode tabs row — modes on the left, New Chat on the right */}
+          <div className={styles.modeTabs}>
+            <div className={styles.modeTabsList}>
+              {MODES.map(m => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`${styles.modeTab} ${mode === m.id ? styles.modeTabActive : ""}`}
+                  onClick={() => selectMode(m.id)}
+                >
+                  <span className={styles.modeTabIcon}><m.Icon /></span>
+                  {m.label}
+                </button>
+              ))}
+            </div>
             {messages.length > 0 && (
               <button type="button" className={styles.clearBtn} onClick={clearChat}>
                 ← New Chat
@@ -881,25 +898,21 @@ export default function ChatPage() {
             )}
           </div>
 
-          {/* Mode tabs */}
-          <div className={styles.modeTabs}>
-            {MODES.map(m => (
-              <button
-                key={m.id}
-                type="button"
-                className={`${styles.modeTab} ${mode === m.id ? styles.modeTabActive : ""}`}
-                onClick={() => selectMode(m.id)}
-              >
-                <span className={styles.modeTabIcon}><m.Icon /></span>
-                {m.label}
-              </button>
-            ))}
-          </div>
-
           <div className={styles.chatInner}>
-              {/* Message list — or spacer when empty */}
+              {/* Message list — or welcome+suggestions when empty */}
               {messages.length === 0 && !loading ? (
-                <div className={styles.emptyState} />
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyStateInner}>
+                    <p className={styles.emptyPrompt}>Try one of these to get started</p>
+                    <div className={styles.suggestions}>
+                      {activeMode.suggestions.map(s => (
+                        <button key={s} type="button" className={styles.suggestion} onClick={() => sendMessage(s)}>
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div className={styles.messageList} ref={listRef}>
                   {messages.map((msg, i) => {
@@ -997,19 +1010,12 @@ export default function ChatPage() {
 
               {/* Input area */}
               <div className={styles.inputArea}>
-                {/* Suggestions — shown only when no messages yet */}
-                {messages.length === 0 && !loading && (
-                  <div className={styles.suggestions}>
-                    {activeMode.suggestions.map(s => (
-                      <button key={s} type="button" className={styles.suggestion} onClick={() => sendMessage(s)}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                )}
                 {atLimit ? (
                   <div className={styles.limitReached}>
-                    Conversation limit reached. Click <strong>New Chat</strong> to begin a new chat.
+                    Conversation limit reached.{" "}
+                    <button type="button" className={styles.clearBtn} onClick={clearChat}>
+                      ← New Chat
+                    </button>
                   </div>
                 ) : (
                   <ChatInputBox
