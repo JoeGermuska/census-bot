@@ -505,29 +505,30 @@
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.55rem 0.9rem;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--accent);
-  font-size: 0.9rem;
+  gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid var(--border-hover);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 0.92rem;
   font-weight: 500;
-  border-radius: 3px;
+  border-radius: 6px;
   text-decoration: none;
   font-family: inherit;
   cursor: pointer;
-  transition: border-color 0.18s ease, background-color 0.18s ease;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
 }
 
 .chip:hover {
   border-color: var(--accent);
-  background: var(--surface-2);
+  background: var(--badge-bg);
+  color: var(--accent);
 }
 
 .quickstartFoot {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   padding-top: 0.85rem;
   border-top: 1px solid var(--border);
   font-size: 0.85rem;
@@ -536,14 +537,24 @@
   flex-wrap: wrap;
 }
 
-.quickstartFoot a {
-  color: var(--accent-2);
-  text-decoration: none;
+.allMetricsBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  border-radius: 4px;
   font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+  font-family: inherit;
+  transition: background 0.18s ease, color 0.18s ease;
 }
 
-.quickstartFoot a:hover {
-  text-decoration: underline;
+.allMetricsBtn:hover {
+  background: var(--badge-bg);
 }
 
 .secondary {
@@ -554,11 +565,14 @@
   padding: 1.5rem 1.75rem;
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.18s ease;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .secondary:hover {
   border-color: var(--accent-2);
+  background: var(--surface-2);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
 .secondaryRow {
@@ -765,6 +779,7 @@
   gap: 0.75rem;
   padding: 0.65rem 0.75rem;
   border: 1px solid var(--border);
+  border-left-width: 3px;
   border-radius: 4px;
   background: var(--surface);
   text-decoration: none;
@@ -773,9 +788,29 @@
 }
 
 .docRow:hover {
-  border-color: var(--accent-2);
   background: var(--surface-2);
 }
+
+.docRowHandbook {
+  border-left-color: var(--accent);
+}
+.docRowHandbook:hover { border-color: var(--accent); border-left-color: var(--accent); }
+
+.docRowMethodology {
+  border-left-color: #2a9d6e;
+}
+.docRowMethodology:hover { border-color: #2a9d6e; border-left-color: #2a9d6e; }
+
+:global(html[data-theme="dark"]) .docRowMethodology { border-left-color: #4ec99a; }
+:global(html[data-theme="dark"]) .docRowMethodology:hover { border-color: #4ec99a; border-left-color: #4ec99a; }
+
+.docRowDefinitions {
+  border-left-color: #c07a18;
+}
+.docRowDefinitions:hover { border-color: #c07a18; border-left-color: #c07a18; }
+
+:global(html[data-theme="dark"]) .docRowDefinitions { border-left-color: #e8a84a; }
+:global(html[data-theme="dark"]) .docRowDefinitions:hover { border-color: #e8a84a; border-left-color: #e8a84a; }
 
 .docKind {
   flex-shrink: 0;

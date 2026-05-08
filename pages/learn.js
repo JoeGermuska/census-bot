@@ -44,13 +44,20 @@ function ResultCard({ result }) {
   );
 }
 
+const KIND_CLASS = {
+  handbook:    "docRowHandbook",
+  methodology: "docRowMethodology",
+  definitions: "docRowDefinitions",
+};
+
 function DocRow({ doc }) {
+  const kindClass = landing[KIND_CLASS[doc.kind]] || "";
   return (
     <Link
       href={doc.has_pdf ? `/docs/${doc.id}.pdf` : doc.url}
       target={doc.has_pdf ? "_blank" : undefined}
       rel={doc.has_pdf ? "noopener noreferrer" : undefined}
-      className={landing.docRow}
+      className={`${landing.docRow} ${kindClass}`}
     >
       <span className={landing.docKind}>{doc.kind}</span>
       <span>
