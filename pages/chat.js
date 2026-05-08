@@ -11,11 +11,38 @@ import { usePlaceGeoid } from "../lib/usePlaceGeoid";
 const MAX_EXCHANGES = 10;
 
 // ── Modes ────────────────────────────────────────────────────────────────────
+function IconBook() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+    </svg>
+  );
+}
+function IconSearch() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+  );
+}
+function IconBarChart() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6" y1="20" x2="6" y2="14"/>
+      <line x1="2" y1="20" x2="22" y2="20"/>
+    </svg>
+  );
+}
+
 const MODES = [
   {
     id: "learn",
     label: "Learn about ACS",
-    icon: "",
+    Icon: IconBook,
     description: "Understand what ACS data is, how it works, and what it covers.",
     placeholder: "What is the American Community Survey?",
     suggestions: [
@@ -28,7 +55,7 @@ const MODES = [
   {
     id: "statistic",
     label: "Find a Statistic",
-    icon: "",
+    Icon: IconSearch,
     description: "Look up live Census data for any U.S. city.",
     placeholder: "What's the median rent in Chicago, Illinois?",
     suggestions: [
@@ -41,7 +68,7 @@ const MODES = [
   {
     id: "visualize",
     label: "Create Visualization",
-    icon: "",
+    Icon: IconBarChart,
     description: "Get chart suggestions and data breakdowns for visual storytelling.",
     placeholder: "Show rent trends for California cities…",
     suggestions: [
@@ -663,8 +690,8 @@ export default function ChatPage() {
         <div className={styles.chatPage}>
 
           {/* Header */}
-          <div className={styles.header}>
-            <div className={styles.headerLeft}>
+          <div className={`${styles.header} ${mode === null ? styles.headerCentered : ""}`}>
+            <div className={`${styles.headerLeft} ${mode === null ? styles.headerLeftCentered : ""}`}>
               <h1 className={styles.title}>
                 Ask a Question
                 {activeMode && <span className={styles.modeInlineLabel}> — {activeMode.label}</span>}
@@ -683,7 +710,6 @@ export default function ChatPage() {
           {/* Mode picker — shown when no mode selected */}
           {mode === null ? (
             <div className={styles.modePicker}>
-              <p className={styles.modePickerLabel}>What would you like to do?</p>
               <div className={styles.modeGrid}>
                 {MODES.map(m => (
                   <button
@@ -692,7 +718,7 @@ export default function ChatPage() {
                     className={styles.modeCard}
                     onClick={() => selectMode(m.id)}
                   >
-                    {m.icon && <span className={styles.modeIcon}>{m.icon}</span>}
+                    <span className={styles.modeIcon}><m.Icon /></span>
                     <span className={styles.modeLabel}>{m.label}</span>
                     <span className={styles.modeDesc}>{m.description}</span>
                   </button>
