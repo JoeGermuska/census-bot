@@ -3,10 +3,17 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useState,
 } from "react";
+
+// useLayoutEffect runs synchronously before paint on the client (prevents a
+// theme flash on first render) but the SSR renderer can't run effects at all,
+// so it emits a hydration-mismatch warning. Swap to useEffect on the server.
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 const STORAGE_KEY = "census-bot-theme";
 
@@ -43,7 +50,7 @@ function applyTheme(theme) {
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState("light");
 
-  useLayoutEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const attr = document.documentElement.dataset.theme;
     if (attr === "light" || attr === "dark") {
       setThemeState(attr);

@@ -4,13 +4,16 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { parseQuery, parseVariableOnly, formatValue, detectAmbiguousMetric, STATE_FIPS } from "../../lib/censusTranslator";
-import { fetchCensusValueWithMOE, fetchCensusValueWithMOEAndFallback } from "../../lib/censusApi";
+import { fetchCensusValue, fetchCensusValueWithMOE, fetchCensusValueWithMOEAndFallback } from "../../lib/censusApi";
 import { QUERY_TYPES, CURRENT_ACS_YEAR } from "../../lib/censusConstants";
-import { computeRateIfNeeded, getRateDenominator } from "../../lib/censusRates";
+import { computeRateIfNeeded, getRateDenominator, getRateMethodology } from "../../lib/censusRates";
+import { getTableById } from "../../lib/acsTablesRag";
 import { validateValue } from "../../lib/validateCensusData";
 import { findGeoCandidates, findZctaByZip, extractGeoPhrase, describeCandidate, geoParamsFromCandidate, candidateLabel } from "../../lib/geoCandidates";
 import { searchAcsDocs } from "../../lib/acsRag";
 import { buildNuanceBanners, buildMethodologyQuery } from "../../lib/acsNuances";
+import { validateVariableClaim } from "../../lib/acsVariableMetadata";
+import { buildDerivedAltChipPayload } from "../../lib/acsAlternativesLoader";
 import fs from "fs";
 import path from "path";
 
@@ -137,6 +140,60 @@ const TREND_TOOL = {
   },
 };
 
+// Free-form variable lookup — used by Claude when the user's metric isn't on
+// the curated lookup_census_data list (e.g., race breakdowns by table B02001 /
+// B03002, language at home, household type, foreign-born by region of origin,
+// any specific Census variable ID Claude can identify from its skills/docs).
+//
+// The shape mirrors lookup_census_data's structured payload so the existing
+// StatCard component renders it without UI changes.
+const ACS_VARIABLE_TOOL = {
+  name: "lookup_census_variable",
+  description:
+    "Look up ANY Census ACS variable for a city/state/county when the metric the user wants " +
+    "is NOT on the curated lookup_census_data enum. Examples: race breakdowns from B02001 or B03002, " +
+    "household type from B11001, language spoken at home from B16001, region of birth from B05006, " +
+    "rooms / bedrooms from B25017 / B25041, etc. Always pick the most precise variable for the user's question " +
+    "and pass a precise human-readable label so the displayed result is unambiguous (e.g., not 'Asian' but " +
+    "'Asian Alone, Not Hispanic'). Always include the table_id so the source link works. Use share_of_variable_id " +
+    "only when the user explicitly asked for a percentage or share — for raw counts, omit it.",
+  input_schema: {
+    type: "object",
+    properties: {
+      variable_id: {
+        type: "string",
+        description: "Census variable ID, e.g. 'B03002_006E'. Must be a real ACS variable.",
+      },
+      label: {
+        type: "string",
+        description: "Precise human-readable label for what this variable represents. Be specific: 'Asian Alone, Not Hispanic' not 'Asian Population'. 'Median Gross Rent' not 'Rent'.",
+      },
+      unit: {
+        type: "string",
+        enum: ["number", "currency", "percent", "years", "minutes", "index"],
+        description: "How the value should be formatted.",
+      },
+      table_id: {
+        type: "string",
+        description: "ACS table ID like 'B02001'. Used to build the source link.",
+      },
+      city: {
+        type: "string",
+        description: "City name, e.g. 'Chicago'. For state-only or county-only queries, pass the empty string.",
+      },
+      state: {
+        type: "string",
+        description: "Full state name, e.g. 'Illinois'.",
+      },
+      share_of_variable_id: {
+        type: "string",
+        description: "Optional: when the user asks for a percentage/share, divide variable_id by this denominator variable ID and return percent.",
+      },
+    },
+    required: ["variable_id", "label", "unit", "table_id", "city", "state"],
+  },
+};
+
 // RAG search over the indexed ACS source documents. Used when the user asks
 // about ACS concepts, methodology, definitions, MOEs, table contents, etc.
 const ACS_DOCS_TOOL = {
@@ -191,7 +248,39 @@ You have access to a live Census data lookup tool. Use it proactively when a use
 Available metrics: ${QUERY_TYPES.join(", ")}.
 
 TOOL RULES:
-- lookup_census_data is for single-year statistics about a specific place.
+- ABSOLUTE: You MUST NOT state any specific ACS statistic — count, dollar
+  amount, percent, year-over-year change — without first calling a tool that
+  returned that exact number. This applies even to numbers you "know" from
+  training data. There is no exception.
+  Wrong:  "The Vietnamese population in San Jose is 101,997."     (no tool call)
+  Right:  call lookup_census_variable with variable_id="B02015_009E",
+          label="Vietnamese Alone", unit="number", table_id="B02015",
+          city="San Jose", state="California", then quote the number it
+          returned.
+- lookup_census_data is for single-year statistics about a specific place,
+  using one of the curated metrics in the "Available metrics" list above.
+- lookup_census_variable is for ANY ACS metric NOT on that curated list —
+  race breakdowns by table B02001 / B03002 / B02015, household type from
+  B11001, language at home from B16001, region of birth from B05006, room
+  counts from B25017 / B25041, etc. You supply the exact Census variable_id,
+  a PRECISE label (specific enough that the user knows what was returned;
+  use "Asian Alone, Not Hispanic" not "Asian Population"; use "Vietnamese
+  Alone" not "Vietnamese Population"), the unit, and the table_id. The tool
+  also accepts county-level queries: pass the county name in the city field
+  (e.g. city = "Queens County", state = "New York"). Only use variable IDs
+  you are confident exist; if uncertain, call search_acs_docs first.
+
+  If lookup_census_variable returns an error with an "ambiguous" or
+  "candidates" field, DO NOT pick one yourself — show the candidates back to
+  the user as a question and let them clarify. Format the question briefly:
+    "Which 'Springfield' did you mean? Springfield, IL · Springfield, MA · Springfield, MO · ..."
+  Wait for the user's reply, then call the tool again with the resolved geo.
+
+  If lookup_census_variable returns a "Wrong variable for ..." error with
+  suggested variable_ids embedded in the message, you MUST retry the tool
+  call IMMEDIATELY using one of the suggestions — do NOT write a text reply
+  giving up. The validator's whole job is to redirect you to the correct
+  variable; use its suggestions on the next iteration.
 - get_census_trend is for multi-year time-series data about a place; the
   server combines its results into a chart payload. Only call it when the
   user actually wants a chart — see the mode-specific instructions below.
@@ -380,6 +469,167 @@ function formatMOE(numericMOE, format) {
     case "minutes":  return `±${parseFloat(n.toFixed(2))} minutes`;
     default:         return `±${parseFloat(n.toFixed(2))}`;
   }
+}
+
+// Runs lookup_census_variable for a free-form Claude-supplied variable ID.
+// Returns the same structured shape as runCensusTool so the chat handler can
+// surface it through the existing StatCard rendering path.
+async function runAcsVariableTool(toolInput) {
+  const censusApiKey = process.env.CENSUS_API_KEY;
+  if (!censusApiKey) return { error: "Census API key not configured on server." };
+
+  const { variable_id, label, unit, table_id, city, state, share_of_variable_id } = toolInput || {};
+  console.log(`[acs-var] call: variable_id=${variable_id}, label="${label}", table_id=${table_id}, city="${city}", state="${state}"`);
+
+  if (!variable_id || !/^[A-Z]\d+_\d+[A-Z]?$/.test(String(variable_id).trim())) {
+    return { error: `Invalid variable_id '${variable_id}'. Must look like 'B03002_006E'.` };
+  }
+  if (!label || !unit || !table_id || !state) {
+    return { error: "Missing required fields. lookup_census_variable needs variable_id, label, unit, table_id, city, state." };
+  }
+
+  // Validate the variable_id against the live ACS metadata BEFORE fetching.
+  // Catches hallucinated picks (e.g. Claude claiming B02015_009E is "Vietnamese
+  // Alone" when it's actually "Other East Asian"). Returns a structured error
+  // back to Claude so it can revise its tool call or fall back to search_acs_docs.
+  const validationError = await validateVariableClaim({ variable_id, label, table_id });
+  if (validationError) return { error: validationError, kind: "variable_validation" };
+
+  // Resolve geo: try the curated parser first (handles plain "City, State" and
+  // states), then fall back to findGeoCandidates for counties, CDPs, and any
+  // other Census geography parseQuery doesn't natively cover. If multiple
+  // candidates match, we return them so Claude can ask the user to clarify
+  // rather than silently picking one.
+  const queryStr = city ? `${label} in ${city}, ${state}` : `${label} in ${state}`;
+  let geoParams = null;
+  let locationLabel = null;
+
+  try {
+    const parsed = parseQuery(queryStr);
+    if (!parsed.error && parsed.geoParams) {
+      geoParams = parsed.geoParams;
+      locationLabel = parsed.locationLabel;
+    }
+  } catch {
+    // fall through to candidate lookup
+  }
+
+  if (!geoParams && city) {
+    try {
+      const candidates = await findGeoCandidates(city, { stateName: state || null });
+      if (candidates && candidates.length >= 1) {
+        // Prompt for clarification ONLY when candidates span multiple states —
+        // those are the cases where picking automatically would silently give
+        // the wrong answer (e.g. "Springfield" with no state). When all
+        // candidates are in the same state, take the top-ranked one (same
+        // behavior as the curated fast path's defaultGeo).
+        const stateSet = new Set(candidates.map(c => c.stateName).filter(Boolean));
+        if (stateSet.size > 1 && !state) {
+          return {
+            error: `"${city}" matches multiple geographies across different states. Ask the user to clarify which one — options include: ${candidates.slice(0, 6).map(c => describeCandidate(c).label).join("; ")}.`,
+            ambiguous: true,
+            candidates: candidates.slice(0, 6).map(c => ({
+              label: describeCandidate(c).label,
+              sublabel: describeCandidate(c).sublabel,
+              geoType: c.geoType,
+            })),
+          };
+        }
+        geoParams = geoParamsFromCandidate(candidates[0]);
+        locationLabel = candidateLabel(candidates[0]);
+      }
+    } catch {
+      // candidate lookup failed — fall through to "couldn't resolve" error
+    }
+  }
+
+  if (!geoParams) {
+    return {
+      error: `Could not resolve "${city}, ${state}" to a Census geography. Ask the user to clarify the location — they may have a typo, or the place may not be tracked in ACS at the requested level.`,
+    };
+  }
+
+  const parsed = { geoParams, locationLabel };
+
+  try {
+    const rawValue = await fetchCensusValue(variable_id, parsed.geoParams, censusApiKey);
+    console.log(`[acs-var] fetched ${variable_id} → "${rawValue}" (geoParams=${JSON.stringify(parsed.geoParams)})`);
+    let numericValue = parseFloat(rawValue);
+
+    // Optional denominator division for share-of queries.
+    if (share_of_variable_id && /^[A-Z]\d+_\d+[A-Z]?$/.test(String(share_of_variable_id).trim())) {
+      const denom = await fetchCensusValue(share_of_variable_id, parsed.geoParams, censusApiKey);
+      const denomNum = parseFloat(denom);
+      if (Number.isFinite(denomNum) && denomNum > 0) {
+        numericValue = (numericValue / denomNum) * 100;
+      } else {
+        return { error: `Denominator ${share_of_variable_id} returned ${denom} — cannot compute share.` };
+      }
+    }
+
+    // Run light validation (free-form vars don't have per-variable rules).
+    const validationWarning = await validateFreeFormResult(numericValue, unit, parsed.geoParams, censusApiKey);
+
+    const formatted = formatValue(numericValue, share_of_variable_id ? "percent" : unit);
+
+    // Auto-derive alternative variables (race × Hispanic counterparts, income
+    // universe variants, etc.) from the metadata-derived alternatives map.
+    // Empty when the derive script hasn't been run or no peers exist.
+    let derivedAlts = null;
+    try {
+      derivedAlts = await buildDerivedAltChipPayload(
+        variable_id,
+        label,
+        share_of_variable_id ? "percent" : unit,
+        `${label} in ${city ? `${city}, ` : ""}${state}`,
+      );
+    } catch (e) {
+      console.warn("[acs-var] alt derivation failed:", e.message);
+    }
+
+    return {
+      metric: label,
+      value: formatted,
+      raw_value: numericValue,
+      unit: share_of_variable_id ? "percent" : unit,
+      table_id,
+      location: parsed.locationLabel,
+      source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
+      ...(validationWarning ? { validation_warning: validationWarning } : {}),
+      ...(derivedAlts ? { derived_alternatives: derivedAlts } : {}),
+    };
+  } catch (err) {
+    console.log(`[acs-var] FETCH ERROR: ${String(err?.message || err)}`);
+    return { error: String(err?.message || "Failed to fetch Census variable.") };
+  }
+}
+
+// Light sanity checks for free-form variables. We don't have per-variable
+// bounds the way validateValue() does for the curated list, so we apply
+// general rules and return a one-line warning string when something looks
+// off (rather than dropping the result).
+async function validateFreeFormResult(value, unit, geoParams, apiKey) {
+  if (!Number.isFinite(value)) return "Value is not a finite number — Census API may have returned a sentinel.";
+  if (value < 0) return "Value is negative, which usually means the Census API returned a sentinel (e.g. -666666666 for suppressed cells).";
+  if (unit === "percent" && (value < 0 || value > 100)) {
+    return `Computed share is ${value.toFixed(2)}% — outside the 0–100 range. Verify the denominator.`;
+  }
+  if (unit === "index" && (value < 0 || value > 1)) {
+    return `Index value ${value.toFixed(3)} is outside the typical 0–1 range.`;
+  }
+  if (unit === "number" && value > 0) {
+    // For raw counts, sanity-check that we're not exceeding the geo's total population.
+    try {
+      const totalPopRaw = await fetchCensusValue("B01003_001E", geoParams, apiKey);
+      const totalPop = parseFloat(totalPopRaw);
+      if (Number.isFinite(totalPop) && totalPop > 0 && value > totalPop * 1.1) {
+        return `Count (${Math.round(value).toLocaleString()}) exceeds the geography's total population (${Math.round(totalPop).toLocaleString()}). Verify this is the right variable.`;
+      }
+    } catch {
+      // Pop lookup is optional — don't block.
+    }
+  }
+  return null;
 }
 
 async function runCensusTool(toolInput) {
@@ -573,6 +823,30 @@ function datasetPath(dataset) {
 const RAG_METHODOLOGY_MIN_SCORE = 1.0;
 const RAG_METHODOLOGY_MAX_CHARS = 600;
 
+// Only authoritative references are eligible to ground a variable's methodology
+// citation: the Subject Definitions, the Design & Methodology Report, the
+// general-audience handbook, and the geography handbook. Audience-specific
+// handbooks (journalists, congress, federal, etc.) are excluded because their
+// phrasing often outscores the real references on BM25 keyword overlap without
+// being the right source to cite.
+function isAuthoritativeMethodologyDoc(doc) {
+  if (!doc) return false;
+  if (doc.kind === "definitions" || doc.kind === "methodology") return true;
+  if (doc.id === "handbook-general" || doc.id === "handbook-geography") return true;
+  return false;
+}
+
+// Strip page-number / running-header noise that PDF text extractors prepend
+// or append to a page's text. Conservative: only removes a 1-4 digit number
+// that stands ALONE at the very start or end of the chunk (followed/preceded
+// by whitespace). Real prose almost never starts with "92 households…".
+function stripPageNoise(text) {
+  return String(text || "")
+    .replace(/^\s*\d{1,4}\s+/, "")
+    .replace(/\s+\d{1,4}\s*$/, "")
+    .trim();
+}
+
 // Truncate at a sentence boundary near the budget so the snippet doesn't
 // end mid-thought.
 function truncateAtSentence(text, maxChars) {
@@ -584,9 +858,59 @@ function truncateAtSentence(text, maxChars) {
   return window.replace(/\s+\S*$/, "") + "…";
 }
 
-// Augment a structured stat payload with deterministic nuance banners and
-// (best-effort) a RAG-fetched methodology passage. Mutates and returns
-// `structured` for convenience. Never throws — RAG failures degrade silently.
+// Build the MOE methodology citation: how the MOE attached to this stat was
+// computed and where the rule comes from. Direct API MOEs cite the companion
+// variable; derived rate MOEs cite the proportion or ratio formula.
+function buildMOEMethodology(variableId) {
+  if (!variableId) return null;
+  const rateMethod = getRateMethodology(variableId);
+  if (rateMethod) {
+    return {
+      kind: rateMethod.kind, // "proportion" | "ratio"
+      formula: rateMethod.formula,
+      description:
+        `Derived from numerator (${variableId}) and denominator ` +
+        `(${rateMethod.denominator}) MOEs using the ACS ${rateMethod.kind} formula.`,
+      sourceLabel: "ACS Statistical Testing guidance — MOE for derived statistics",
+    };
+  }
+  const moeId = String(variableId).replace(/E$/, "M");
+  return {
+    kind: "direct",
+    formula: null,
+    description:
+      `Margin of error reported directly by the Census Bureau on companion ` +
+      `variable ${moeId} (90% confidence interval).`,
+    sourceLabel: "U.S. Census Bureau — ACS published MOE",
+  };
+}
+
+// Build the tableInfo block from the local catalog (docs/tables-index.json).
+// Returns null if the catalog is missing or doesn't contain this table id.
+async function buildTableInfo(variableId, year) {
+  const tableId = String(variableId || "").split("_")[0];
+  if (!tableId) return null;
+  const t = await getTableById(tableId);
+  if (!t) return null;
+  return {
+    tableId: t.tableId,
+    kind: t.kind,
+    kindLabel: t.kindLabel,
+    concept: t.concept,
+    universe: t.universe,
+    releases: t.releases,
+    endpoints: t.endpoints,
+    variableCount: t.variableCount,
+    chunkId: `acs-tables-${t.kind}-${year || 2024}__${t.tableId}`,
+    catalogSource: `Verified against local ACS ${year || 2024} table catalog`,
+  };
+}
+
+// Augment a structured stat payload with deterministic nuance banners,
+// (best-effort) a RAG-fetched methodology passage, the MOE methodology
+// citation, and table-info lifted from the local table catalog. Mutates
+// and returns `structured` for convenience. Never throws — RAG/catalog
+// misses degrade silently.
 async function attachNuancesAndMethodology(structured, variableId) {
   if (!structured) return structured;
   // Make sure the raw variableId is present so banner rules can read it.
@@ -594,21 +918,41 @@ async function attachNuancesAndMethodology(structured, variableId) {
 
   structured.nuances = buildNuanceBanners(structured);
 
-  try {
-    const query = buildMethodologyQuery(variableId, structured.variable);
-    const { results } = await searchAcsDocs(query, { topK: 1 });
-    const top = results?.[0];
+  // Cheap, pure-code MOE methodology block — only attach when we actually
+  // have an MOE to explain.
+  if (structured.moe != null && variableId) {
+    structured.moeMethodology = buildMOEMethodology(variableId);
+  }
+
+  // Run the handbook RAG search and the local table-catalog lookup in
+  // parallel — they're independent and the table lookup is fast.
+  // Methodology search is restricted to authoritative references (Subject
+  // Definitions / Design & Methodology / general+geography handbooks) so
+  // audience-specific handbooks (journalists, congress, etc.) can't outscore
+  // them on BM25 keyword overlap and end up cited as the methodology source.
+  const [methodologyResult, tableInfoResult] = await Promise.allSettled([
+    (async () => {
+      const query = buildMethodologyQuery(variableId, structured.variable);
+      return searchAcsDocs(query, { topK: 1, docFilter: isAuthoritativeMethodologyDoc });
+    })(),
+    buildTableInfo(variableId, structured.year),
+  ]);
+
+  if (methodologyResult.status === "fulfilled") {
+    const top = methodologyResult.value?.results?.[0];
     if (top && top.score >= RAG_METHODOLOGY_MIN_SCORE) {
       structured.methodology = {
-        text: truncateAtSentence(top.text, RAG_METHODOLOGY_MAX_CHARS),
+        text: truncateAtSentence(stripPageNoise(top.text), RAG_METHODOLOGY_MAX_CHARS),
         doc_title: top.doc_title,
         doc_url: top.doc_url,
         page: top.page,
         chunk_id: top.chunk_id,
       };
     }
-  } catch {
-    // RAG miss → no methodology block, banners still render.
+  }
+
+  if (tableInfoResult.status === "fulfilled" && tableInfoResult.value) {
+    structured.tableInfo = tableInfoResult.value;
   }
 
   return structured;
@@ -964,19 +1308,34 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
     const p = buildGeoAltPayload(ambiguity.geo, userMsg, activeGeo, extraMeta);
     if (p) alternatives.push(p);
   }
+
+  // Derived alternatives — auto-discovered cross-table peers (e.g. race-alone
+  // <-> race-non-Hispanic, household income <-> family income) from the
+  // metadata-derived map. Skipped when a hand-written ambiguity bucket already
+  // covered the metric, to avoid duplicate chip rows.
+  if (activeMetric?.variableId && !ambiguity.metric) {
+    try {
+      const derived = await buildDerivedAltChipPayload(
+        activeMetric.variableId,
+        activeMetric.label || "this metric",
+        activeMetric.format || "number",
+        userMsg,
+      );
+      if (derived) alternatives.push(derived);
+    } catch (e) {
+      console.warn("[fast-path] derived alt failed:", e.message);
+    }
+  }
+
   const altsField = alternatives.length > 0 ? { alternatives } : {};
 
   // Up-front metric check: if no metric can be resolved (no pick, no ambiguity
-  // default, no VARIABLE_MAP match), surface a metric-not-recognized prompt
-  // instead of falling through to a geo-quirk message that points at the wrong
-  // problem (or to the agentic loop, which can hallucinate).
+  // default, no VARIABLE_MAP match), defer to the agentic loop. Claude has
+  // lookup_census_variable for any ACS variable not in the curated map, plus
+  // light server-side validation of free-form results — so this is now the
+  // intended path for long-tail queries (race × age, language at home, etc.).
   const metricResolved = !!(activeMetric || parseVariableOnly(userMsg));
-  if (!metricResolved) {
-    return res.status(200).json({
-      reply: buildMetricNotRecognizedPrompt(),
-      ...altsField,
-    });
-  }
+  if (!metricResolved) return null;
 
   // Path 1: chart route — runs only when the user *explicitly* asked for a
   // chart/graph (e.g. "rent chart for Austin"). Statistic mode is otherwise
@@ -1193,7 +1552,17 @@ export default async function handler(req, res) {
     // result (auto-defaulting on ambiguity) plus an `alternatives` payload
     // listing the other interpretations the user can click. Falls through to
     // the agentic loop only when parseQuery can't resolve the query at all.
-    if (mode === "statistic") {
+    //
+    // Multi-turn deferral: the fast path is single-turn / context-free. Once
+    // the conversation has any prior assistant turn, defer to Claude so it can
+    // use the conversation context. Exception: chip clicks (pickedGeo /
+    // pickedMetric) always go through the fast path because they're already
+    // pre-resolved choices that don't need conversation context.
+    const hasPriorAssistantTurn = messages.some(m => m.role === "assistant");
+    const hasChipPick = !!(pickedGeo || pickedMetric);
+    const useFastPath = mode === "statistic" && (!hasPriorAssistantTurn || hasChipPick);
+
+    if (useFastPath) {
       const fastPathResult = await handleStatisticModeFastPath(req, res, initialUserMsg, mode, {
         pickedGeo,
         pickedMetric,
@@ -1204,6 +1573,13 @@ export default async function handler(req, res) {
     let currentMessages = messages;
     let finalReply = null;
     const trendSeries = []; // collected across tool calls for multi-line comparisons
+    // Captures the most recent successful free-form variable lookup so we can
+    // surface it as a StatCard alongside Claude's text reply. If Claude calls
+    // the tool more than once in a turn, the last successful result wins.
+    let acsVariableStructured = null;
+    // Derived alternatives chip payload from the most recent successful free-form
+    // variable lookup. Same shape AlternativesBlock already consumes for income/etc.
+    let acsVariableAlternatives = null;
     const loopDeadline = Date.now() + LOOP_TIMEOUT_MS;
     // Output contract: charts are required only in visualize mode. Statistic
     // and learn modes always return text replies — keywords don't override that.
@@ -1219,12 +1595,26 @@ export default async function handler(req, res) {
       const latestUserMsg = getLatestUserMessage(currentMessages);
       const systemPrompt = buildSystemPrompt(latestUserMsg, mode);
 
+      // Force Claude to use a tool on the FIRST iteration of statistic mode
+      // when the user's message contains a location phrase. This prevents the
+      // failure mode where Claude would silently answer specific Census numbers
+      // from training data instead of calling a tool. After iteration 0 we
+      // revert to auto so Claude can write the final text reply.
+      const userMsgForGate = getLatestUserMessage(currentMessages);
+      const looksLikeDataQuestion = mode === "statistic"
+        && i === 0
+        && !!extractGeoPhrase(userMsgForGate);
+      const toolChoice = looksLikeDataQuestion
+        ? { type: "any" }
+        : { type: "auto" };
+
       // Race the Claude call against the remaining timeout budget
       const responsePromise = client.messages.create({
         model: MODEL,
         max_tokens: MAX_TOKENS,
         system: systemPrompt,
-        tools: [CENSUS_TOOL, TREND_TOOL, ACS_DOCS_TOOL],
+        tools: [CENSUS_TOOL, ACS_VARIABLE_TOOL, TREND_TOOL, ACS_DOCS_TOOL],
+        tool_choice: toolChoice,
         messages: currentMessages,
       });
 
@@ -1234,7 +1624,8 @@ export default async function handler(req, res) {
 
       const response = await Promise.race([responsePromise, timeoutPromise]);
 
-      console.log(`[chat] loop iteration ${i}, stop_reason=${response.stop_reason}, content_types=${response.content.map(b => b.type).join(",")}`);
+      const toolsCalled = response.content.filter(b => b.type === "tool_use").map(b => b.name);
+      console.log(`[chat] loop iteration ${i}, stop_reason=${response.stop_reason}, tool_choice=${JSON.stringify(toolChoice)}, tools_called=[${toolsCalled.join(",")}]`);
 
       if (response.stop_reason === "end_turn" || response.stop_reason === "max_tokens") {
         const textBlock = response.content.find(b => b.type === "text");
@@ -1271,6 +1662,27 @@ export default async function handler(req, res) {
               }
             } else if (block.name === CENSUS_TOOL.name) {
               result = await runCensusTool(block.input);
+            } else if (block.name === ACS_VARIABLE_TOOL.name) {
+              result = await runAcsVariableTool(block.input);
+              if (result && !result.error && Number.isFinite(result.raw_value)) {
+                acsVariableStructured = {
+                  value: result.raw_value,
+                  variable: result.metric,
+                  variableId: block.input?.variable_id,
+                  place: result.location,
+                  year: Number(CURRENT_ACS_YEAR),
+                  unit: result.unit,
+                  source: result.source,
+                  tables: [{
+                    tableId: result.table_id,
+                    url: `https://censusreporter.org/tables/${result.table_id}/`,
+                  }],
+                  ...(result.validation_warning ? { validation_warning: result.validation_warning } : {}),
+                };
+                if (result.derived_alternatives) {
+                  acsVariableAlternatives = result.derived_alternatives;
+                }
+              }
             } else if (block.name === ACS_DOCS_TOOL.name) {
               result = await runAcsDocsTool(block.input);
             } else {
@@ -1344,11 +1756,21 @@ export default async function handler(req, res) {
         const answer = finalReply.replace(/\[methodology\][\s\S]*$/, "").trim();
         const methodology = methMatch ? methMatch[1].trim() : null;
         const caveats = cavMatch ? cavMatch[1].trim() : null;
-        return res.status(200).json({ reply: answer, methodology, caveats });
+        return res.status(200).json({
+          reply: answer,
+          methodology,
+          caveats,
+          ...(acsVariableStructured ? { structured: acsVariableStructured } : {}),
+          ...(acsVariableAlternatives ? { alternatives: [acsVariableAlternatives] } : {}),
+        });
       }
     }
 
-    return res.status(200).json({ reply: finalReply });
+    return res.status(200).json({
+      reply: finalReply,
+      ...(acsVariableStructured ? { structured: acsVariableStructured } : {}),
+      ...(acsVariableAlternatives ? { alternatives: [acsVariableAlternatives] } : {}),
+    });
   } catch (err) {
     console.error("[chat] API error:", err);
     const message = err?.message || "Internal server error.";

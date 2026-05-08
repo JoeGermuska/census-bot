@@ -1,5 +1,5 @@
 // pages/chat.js — Ask Question: Claude-powered Census chatbot
-import { useState, useRef, useEffect } from "react";
+import { Fragment, useState, useRef, useEffect } from "react";
 import Head from "next/head";
 import SiteLayout from "../components/SiteLayout";
 import TrendChart from "../components/TrendChart";
@@ -185,6 +185,8 @@ function formatStatValue(raw, unit) {
       return `${parseFloat(num.toFixed(3))} yrs`;
     case "minutes":
       return `${parseFloat(num.toFixed(3))} min`;
+    case "index":
+      return num.toFixed(3);
     case "number":
     default:
       return new Intl.NumberFormat("en-US").format(Math.round(num));
@@ -203,7 +205,6 @@ function SourceFooter({ source, metric, place }) {
       target="_blank"
       rel="noopener noreferrer"
       className={styles.statCardSource}
-      style={{ textDecoration: "underline", textUnderlineOffset: 2 }}
     >
       {source}
     </a>
@@ -222,45 +223,96 @@ function StatCard({ structured }) {
   const tables = Array.isArray(structured.tables) ? structured.tables : [];
   const nuances = Array.isArray(structured.nuances) ? structured.nuances : [];
   const methodology = structured.methodology || null;
-  const hasMethPanel = nuances.length > 0 || !!methodology;
+  const moeFormatted = structured.moeFormatted || null;
+  const moeMethodology = structured.moeMethodology || null;
+  const tableInfo = structured.tableInfo || null;
+  const hasMethPanel = nuances.length > 0 || !!methodology || !!moeMethodology || !!tableInfo;
+
+  // Title combines place and metric when both are known. Falls back gracefully
+  // if either is missing — works for any metric/place combination, not specific
+  // to income or Seattle.
+  const title = structured.place && structured.variable
+    ? `${structured.place}: ${structured.variable}`
+    : (structured.variable || structured.place || "");
 
   return (
     <div className={styles.statCardChat}>
-      <div className={styles.statCardLabel}>{structured.variable}</div>
+      <div className={styles.statCardTitle}>{title}</div>
       <div className={styles.statCardValue}>{value}</div>
-      <div className={styles.statCardMeta}>
-        <span className={styles.statCardPlace}>{structured.place}</span>
-        <span className={styles.statCardDot}>·</span>
-        <SourceFooter source={sourceLabel} metric={structured.variable} place={structured.place} />
-      </div>
-      {tables.length > 0 && (
-        <div className={styles.statCardSources}>
-          <span className={styles.statCardSourcesLabel}>Source:</span>
-          {tables.map((t, i) => (
-            <a
-              key={t.tableId}
-              href={t.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.statCardTableLink}
+      {moeFormatted && (
+        <div className={styles.statCardMOE}>{moeFormatted} margin of error (90% CI)</div>
+      )}
+      {(sourceLabel || tables.length > 0 || hasMethPanel) && (
+        <div className={styles.statCardSourceRow}>
+          <div className={styles.statCardSources}>
+            {(sourceLabel || tables.length > 0) && (
+              <span className={styles.statCardSourcesLabel}>Source:</span>
+            )}
+            {sourceLabel && (
+              <SourceFooter source={sourceLabel} metric={structured.variable} place={structured.place} />
+            )}
+            {tables.map((t, i) => (
+              <Fragment key={t.tableId}>
+                {(sourceLabel || i > 0) && <span className={styles.statCardSep}>,</span>}
+                <a
+                  href={t.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.statCardTableLink}
+                >
+                  Table {t.tableId}
+                </a>
+              </Fragment>
+            ))}
+          </div>
+          {hasMethPanel && (
+            <button
+              type="button"
+              className={styles.statCardMethBtn}
+              onClick={() => setMethOpen(o => !o)}
+              aria-expanded={methOpen}
             >
-              Table {t.tableId}{i < tables.length - 1 ? "," : ""}
-            </a>
-          ))}
+              {methOpen ? "Hide more information ▲" : "More information ▼"}
+            </button>
+          )}
         </div>
       )}
-      {hasMethPanel && (
+      {hasMethPanel && methOpen && (
         <div className={styles.statCardMethWrap}>
-          <button
-            type="button"
-            className={styles.statCardMethBtn}
-            onClick={() => setMethOpen(o => !o)}
-            aria-expanded={methOpen}
-          >
-            {methOpen ? "Hide methodology & caveats ▲" : "Methodology & caveats ▼"}
-          </button>
-          {methOpen && (
-            <div className={styles.statCardMethBody}>
+          <div className={styles.statCardMethBody}>
+              {tableInfo && (
+                <div className={styles.statCardMethPassage}>
+                  <div className={styles.statCardMethHeader}>
+                    Table {tableInfo.tableId} — {tableInfo.concept || tableInfo.kindLabel}
+                  </div>
+                  {tableInfo.universe && (
+                    <p className={styles.statCardMethText}>
+                      <strong>Universe:</strong> {tableInfo.universe}
+                    </p>
+                  )}
+                  {Array.isArray(tableInfo.releases) && tableInfo.releases.length > 0 && (
+                    <p className={styles.statCardMethText}>
+                      <strong>Released in:</strong>{" "}
+                      {tableInfo.releases.map(r => r === "acs5" ? "5-Year" : "1-Year").join(", ")}
+                    </p>
+                  )}
+                  <span className={styles.statCardMethCite}>
+                    — {tableInfo.catalogSource || "Local ACS table catalog"}
+                  </span>
+                </div>
+              )}
+              {moeMethodology && (
+                <div className={styles.statCardMethPassage}>
+                  <div className={styles.statCardMethHeader}>How the margin of error was calculated</div>
+                  <p className={styles.statCardMethText}>{moeMethodology.description}</p>
+                  {moeMethodology.formula && (
+                    <p className={styles.statCardMethText}>
+                      <code>{moeMethodology.formula}</code>
+                    </p>
+                  )}
+                  <span className={styles.statCardMethCite}>— {moeMethodology.sourceLabel}</span>
+                </div>
+              )}
               {nuances.length > 0 && (
                 <ul className={styles.statCardNuanceList}>
                   {nuances.map((n, i) => (
@@ -292,8 +344,7 @@ function StatCard({ structured }) {
                   )}
                 </div>
               )}
-            </div>
-          )}
+          </div>
         </div>
       )}
     </div>

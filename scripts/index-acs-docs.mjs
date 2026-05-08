@@ -123,6 +123,17 @@ function chunkText(text, { targetTokens = TARGET_TOKENS, overlapTokens = OVERLAP
 // ── Source readers ──────────────────────────────────────────────────────────
 async function exists(path) { try { await access(path); return true; } catch { return false; } }
 
+// Strip page-number / running-header noise that PDF text extractors prepend
+// or append to a page's text. A standalone 1-4 digit number at the very start
+// or end of the page is treated as a header/footer artifact. Real body prose
+// almost never begins or ends with a bare integer.
+function stripPageNoise(pageText) {
+  return String(pageText || "")
+    .replace(/^\s*\d{1,4}\s+/, "")
+    .replace(/\s+\d{1,4}\s*$/, "")
+    .trim();
+}
+
 async function readPdf(src) {
   const path = resolve(PDFS_DIR, `${src.id}.pdf`);
   if (!await exists(path)) throw new Error(`Missing PDF: ${path}. Run: npm run fetch:acs-docs`);
@@ -130,7 +141,7 @@ async function readPdf(src) {
   const { totalPages, text } = await extractText(new Uint8Array(buf));
   const out = [];
   for (let pageIdx = 0; pageIdx < text.length; pageIdx += 1) {
-    const pageText = (text[pageIdx] || "").trim();
+    const pageText = stripPageNoise(text[pageIdx] || "");
     if (!pageText) continue;
     const pieces = chunkText(pageText);
     for (let i = 0; i < pieces.length; i += 1) {
