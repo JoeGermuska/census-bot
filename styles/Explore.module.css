@@ -77,6 +77,73 @@
   margin-bottom: 1rem;
 }
 
+/* ── Metric groups ── */
+.metricGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.metricGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.metricGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.metricGroupLabel {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.metricGroupCount {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--badge-bg);
+  border: 1px solid var(--badge-border);
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  letter-spacing: 0.04em;
+}
+
+.selectAllBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.08rem 0.55rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+}
+
+.selectAllBtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--badge-bg);
+}
+
+.selectAllBtnActive {
+  color: var(--accent);
+  border-color: var(--badge-border);
+  background: var(--badge-bg);
+}
+
 .choiceList {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
