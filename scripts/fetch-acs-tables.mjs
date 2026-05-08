@@ -2,8 +2,8 @@
 // every ACS endpoint (4 kinds × 2 releases × 1 year).
 // Run: npm run fetch:acs-tables [-- --year=2024] [--force]
 //
-// Output: docs/raw/tables/<year>/<release>__<kind>__variables.json
-//         docs/raw/tables/<year>/<release>__<kind>__groups.json
+// Output: acs-data/raw/tables/<year>/<release>__<kind>__variables.json
+//         acs-data/raw/tables/<year>/<release>__<kind>__groups.json
 //
 // Idempotent: skips files that already exist. --force re-downloads.
 // Tolerant of 404s (e.g. cprofile may not exist for older years).
@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const force = args.includes("--force");
 const yearArg = args.find(a => a.startsWith("--year="))?.split("=")[1];
 const YEAR = yearArg || "2024";
-const OUT_DIR = resolve(PROJECT_ROOT, "docs/raw/tables", YEAR);
+const OUT_DIR = resolve(PROJECT_ROOT, "acs-data/raw/tables", YEAR);
 
 async function exists(p) {
   try { await access(p); return true; } catch { return false; }

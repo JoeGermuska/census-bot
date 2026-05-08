@@ -29,21 +29,15 @@ yarn-error.log*
 .env.production.local
 
 # raw ACS source files — regeneratable via `npm run fetch:acs-docs` and
-# `npm run fetch:acs-tables`. Only the indexed JSON files (docs/index.json,
-# docs/tables-index.json) are checked in.
-docs/raw/
+# `npm run fetch:acs-tables`. Only the indexed JSON files (acs-data/index.json,
+# acs-data/tables-index.json) are checked in.
+acs-data/raw/
 
 # vercel
 .vercel
 .claude/worktrees/
 .claude/settings.local.json
 
-# Local-only metric-graph exploration page (kept on disk, not shipped).
-# Regenerate the layout via `node scripts/build-graph-layout.mjs` whenever
-# the underlying lib/acsAlternatives.json data changes.
-pages/test/metric-graph.js
-pages/api/graph-layout.js
-scripts/build-graph-layout.mjs
-scripts/derive-acs-alternatives.mjs
-lib/graphLayout.json
-lib/acsAlternatives.json
+# Local-only IPUMS testing sandbox — never committed.
+# Contains IPUMS API key in .env and downloaded NHGIS extracts.
+ipums-sandbox/

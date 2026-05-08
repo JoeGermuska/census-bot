@@ -336,10 +336,14 @@ export default function ExploreResults() {
       if (!res.ok) {
         setTrendByQuery(prev => ({ ...prev, [query]: { error: data.error || "Trend failed" } }));
       } else {
+        // /api/trend now returns { points, locationLabel, ... }. Older
+        // shape (bare array) was deprecated when chat-side trends started
+        // needing the resolved label echoed back in the body.
+        const points = Array.isArray(data?.points) ? data.points : [];
         const chartData = {
           type: "trend_chart", metric: metricLabel || "Trend",
-          location: `${city}, ${stateName}`,
-          points: Array.isArray(data) ? data.map(p => ({ year: Number(p.year), numericValue: Number(p.numericValue) })) : [],
+          location: data?.locationLabel || `${city}, ${stateName}`,
+          points: points.map(p => ({ year: Number(p.year), numericValue: Number(p.numericValue) })),
           source: "U.S. Census Bureau ACS 5-Year Estimates",
         };
         setTrendByQuery(prev => ({ ...prev, [query]: chartData }));

@@ -1,8 +1,8 @@
-// scripts/index-acs-docs.mjs — chunk + tokenize ACS docs, write docs/index.json.
+// scripts/index-acs-docs.mjs — chunk + tokenize ACS docs, write acs-data/index.json.
 // Run: npm run index    (after npm run fetch:acs-docs)
 //
-// Inputs:  docs/raw/pdfs/<id>.pdf, docs/raw/html/<id>.html
-// Output:  docs/index.json — { meta, docs, chunks, df, avgdl, N }
+// Inputs:  acs-data/raw/pdfs/<id>.pdf, acs-data/raw/html/<id>.html
+// Output:  acs-data/index.json — { meta, docs, chunks, df, avgdl, N }
 //
 // Pure local: no API calls, no API keys. Search is BM25 over tokenized chunks.
 
@@ -15,9 +15,9 @@ import { PDF_SOURCES, HTML_SOURCES } from "./acs-sources.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "..");
-const PDFS_DIR = resolve(PROJECT_ROOT, "docs/raw/pdfs");
-const HTML_DIR = resolve(PROJECT_ROOT, "docs/raw/html");
-const OUT_PATH = resolve(PROJECT_ROOT, "docs/index.json");
+const PDFS_DIR = resolve(PROJECT_ROOT, "acs-data/raw/pdfs");
+const HTML_DIR = resolve(PROJECT_ROOT, "acs-data/raw/html");
+const OUT_PATH = resolve(PROJECT_ROOT, "acs-data/index.json");
 
 // ── Tunables ────────────────────────────────────────────────────────────────
 const TARGET_TOKENS = 600;            // target chunk size

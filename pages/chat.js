@@ -705,8 +705,8 @@ export default function ChatPage() {
   const listRef = useRef(null);
   const textareaRef = useRef(null);
 
-  // Read ?prefill=... — used by the metric-graph "Look this up in the bot"
-  // button to jump directly into a partially-typed query.
+  // Read ?prefill=... — lets external entry points jump straight into the
+  // chat with a partially-typed query.
   const router = useRouter();
   useEffect(() => {
     if (!router.isReady) return;
@@ -949,7 +949,7 @@ export default function ChatPage() {
                           ) : (
                             msg.content
                           )}
-                          {msg.role === "assistant" && !isTrendChart && !isClarification && !msg.structured && Array.isArray(msg.sources) && msg.sources.length > 0 && (
+                          {msg.role === "assistant" && !isClarification && !msg.structured && Array.isArray(msg.sources) && msg.sources.length > 0 && (
                             <SourceTrail sources={msg.sources} />
                           )}
                           {msg.role === "assistant" && !isTrendChart && !isClarification && msg.alternatives && msg.alternatives.length > 0 && (

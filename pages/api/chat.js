@@ -6,13 +6,18 @@ import Anthropic from "@anthropic-ai/sdk";
 import { parseQuery, parseVariableOnly, formatValue, detectAmbiguousMetric, STATE_FIPS } from "../../lib/censusTranslator";
 import { fetchCensusValue, fetchCensusValueWithMOEAndFallback } from "../../lib/censusApi";
 import { QUERY_TYPES, CURRENT_ACS_YEAR } from "../../lib/censusConstants";
-import { computeRateIfNeeded, getRateDenominator, getRateMethodology } from "../../lib/censusRates";
-import { getTableById } from "../../lib/acsTablesRag";
+import { computeRateIfNeeded } from "../../lib/censusRates";
 import { validateValue } from "../../lib/validateCensusData";
 import { findGeoCandidates, findZctaByZip, extractGeoPhrase, describeCandidate, geoParamsFromCandidate, candidateLabel } from "../../lib/geoCandidates";
 import { searchAcsDocs } from "../../lib/acsRag";
-import { buildNuanceBanners, buildMethodologyQuery } from "../../lib/acsNuances";
 import { validateVariableClaim } from "../../lib/acsVariableMetadata";
+import {
+  formatMOE,
+  buildSourceLabel,
+  buildSourceTables,
+  attachNuancesAndMethodology,
+  buildTrendSourceEntry,
+} from "../../lib/sourcing";
 import fs from "fs";
 import path from "path";
 
@@ -125,17 +130,52 @@ const CENSUS_TOOL = {
 
 const TREND_TOOL = {
   name: "get_census_trend",
-  description: "Fetch multi-year Census ACS time series data for a city/state. Use for graphs or trends.",
+  description:
+    "Fetch multi-year Census ACS time series for any variable across any geography. Use for graphs or trends. " +
+    "Pass a free-form location string — the server resolves it to a Census geography. " +
+    "Supports cities ('Austin, Texas'), states ('California'), counties ('Cook County, Illinois'), " +
+    "metro areas ('New York-Newark metro'), and ZIP codes ('zip 90210'). " +
+    "For VARIABLE: pick ONE — pass `metric` for curated metrics (median rent, population, " +
+    "unemployment rate, etc.), OR pass `variable_id` + `label` + `unit` + `table_id` for ANY ACS " +
+    "variable (race breakdowns from B02001/B03002, household type from B11001, language at home " +
+    "from B16001, etc. — same shape as lookup_census_variable). " +
+    "Pass `share_of_variable_id` to compute a year-by-year share (returns percent).",
   input_schema: {
     type: "object",
     properties: {
-      city: { type: "string" },
-      state: { type: "string" },
-      metric: { type: "string" },
+      location: {
+        type: "string",
+        description: "Geography expression — anything ACS publishes. Examples: 'Austin, Texas', 'California', 'Cook County, Illinois', 'zip 90210'.",
+      },
+      metric: {
+        type: "string",
+        description: "Curated metric name (see lookup_census_data list). Use this OR variable_id, not both.",
+      },
+      variable_id: {
+        type: "string",
+        description: "ACS variable ID like 'B03002_006E' for free-form trends. Required when metric isn't on the curated list. Always pair with label, unit, and table_id.",
+      },
+      label: {
+        type: "string",
+        description: "Precise human-readable label for the variable (e.g. 'Asian Alone, Not Hispanic'). Required when variable_id is given.",
+      },
+      unit: {
+        type: "string",
+        enum: ["number", "currency", "percent", "years", "minutes", "index"],
+        description: "Format for the values. Required when variable_id is given.",
+      },
+      table_id: {
+        type: "string",
+        description: "ACS table ID like 'B02001'. Required when variable_id is given.",
+      },
+      share_of_variable_id: {
+        type: "string",
+        description: "Optional: divide the variable by this denominator (variable ID) and return percent. Use only when the user explicitly asks for a share over time.",
+      },
       startYear: { type: "number" },
       endYear: { type: "number" },
     },
-    required: ["city", "state", "startYear", "endYear"],
+    required: ["location", "startYear", "endYear"],
   },
 };
 
@@ -453,23 +493,6 @@ async function runAcsDocsTool(toolInput) {
   }
 }
 
-// Format a numeric MOE for display alongside an estimate. Percent rates have
-// MOEs in *percentage points*, not percent — using "pp" avoids conflating the
-// rate's scale with the MOE's scale.
-function formatMOE(numericMOE, format) {
-  if (numericMOE == null) return null;
-  const n = Math.abs(Number(numericMOE));
-  if (!Number.isFinite(n)) return null;
-  switch (format) {
-    case "currency": return `±${formatValue(n, "currency")}`;
-    case "number":   return `±${formatValue(n, "number")}`;
-    case "percent":  return `±${parseFloat(n.toFixed(2))} pp`;
-    case "years":    return `±${parseFloat(n.toFixed(2))} years`;
-    case "minutes":  return `±${parseFloat(n.toFixed(2))} minutes`;
-    default:         return `±${parseFloat(n.toFixed(2))}`;
-  }
-}
-
 // Runs lookup_census_variable for a free-form Claude-supplied variable ID.
 // Returns the same structured shape as runCensusTool so the chat handler can
 // surface it through the existing StatCard rendering path.
@@ -734,7 +757,12 @@ function wantsExplicitChart(text) {
 }
 
 async function runTrendTool(req, toolInput) {
-  const { city, state, metric, startYear, endYear } = toolInput || {};
+  const {
+    location, city, state,
+    metric,
+    variable_id, label, unit, table_id, share_of_variable_id,
+    startYear, endYear,
+  } = toolInput || {};
 
   const host = req.headers["x-forwarded-host"] || req.headers.host;
   const proto = req.headers["x-forwarded-proto"] || "http";
@@ -744,7 +772,12 @@ async function runTrendTool(req, toolInput) {
     const response = await fetch(`${baseUrl}/api/trend`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ city, state, metric, startYear, endYear }),
+      body: JSON.stringify({
+        location, city, state,
+        metric,
+        variable_id, label, unit, table_id, share_of_variable_id,
+        startYear, endYear,
+      }),
     });
 
     const data = await response.json();
@@ -753,7 +786,10 @@ async function runTrendTool(req, toolInput) {
       return { error: data?.error || "Trend endpoint returned an error." };
     }
 
-    if (!Array.isArray(data)) {
+    // /api/trend now returns { points, locationLabel, unit, variableId,
+    // variableLabel, tableId } so callers can build legends and source-trail
+    // rows without re-resolving anything client-side.
+    if (!data || !Array.isArray(data.points)) {
       return { error: "Trend endpoint returned invalid response format." };
     }
 
@@ -844,176 +880,9 @@ function buildDeterministicSentence(place, variable, numericValue, format, year)
   return `${place} had a ${variable.toLowerCase()} of ${formatted} in ${year}.`;
 }
 
-// "B19013_001E" → "B19013"
-function tableIdOf(variableId) {
-  return String(variableId || "").split("_")[0];
-}
-
-// Build the source-link payload for a given primary variable. Includes the
-// denominator's table when it differs from the numerator's (e.g. mean commute,
-// where B08136 / B08303 come from two different tables).
-function buildSourceTables(variableId) {
-  const tables = new Set([tableIdOf(variableId)]);
-  const denom = getRateDenominator(variableId);
-  if (denom) tables.add(tableIdOf(denom));
-  return Array.from(tables).map((tableId) => ({
-    tableId,
-    url: `https://censusreporter.org/tables/${tableId}/`,
-  }));
-}
-
-// Friendly label for the dataset used: "ACS 2024 1-Year Estimates" or
-// "ACS 2020–2024 5-Year Estimates".
-function buildSourceLabel(dataset, year) {
-  const yr = Number(year);
-  if (dataset === "acs1") return `ACS ${yr} 1-Year Estimates`;
-  return `ACS ${yr - 4}–${yr} 5-Year Estimates`;
-}
-
 // Census API path for a dataset key, mapped from our short name.
 function datasetPath(dataset) {
   return dataset === "acs1" ? "acs/acs1" : "acs/acs5";
-}
-
-// Minimum BM25 score for a RAG passage to be considered "good enough" to
-// surface as the variable's methodology citation. Below this, we skip rather
-// than include a weak match that would confuse the user.
-const RAG_METHODOLOGY_MIN_SCORE = 1.0;
-const RAG_METHODOLOGY_MAX_CHARS = 600;
-
-// Only authoritative references are eligible to ground a variable's methodology
-// citation: the Subject Definitions, the Design & Methodology Report, the
-// general-audience handbook, and the geography handbook. Audience-specific
-// handbooks (journalists, congress, federal, etc.) are excluded because their
-// phrasing often outscores the real references on BM25 keyword overlap without
-// being the right source to cite.
-function isAuthoritativeMethodologyDoc(doc) {
-  if (!doc) return false;
-  if (doc.kind === "definitions" || doc.kind === "methodology") return true;
-  if (doc.id === "handbook-general" || doc.id === "handbook-geography") return true;
-  return false;
-}
-
-// Strip page-number / running-header noise that PDF text extractors prepend
-// or append to a page's text. Conservative: only removes a 1-4 digit number
-// that stands ALONE at the very start or end of the chunk (followed/preceded
-// by whitespace). Real prose almost never starts with "92 households…".
-function stripPageNoise(text) {
-  return String(text || "")
-    .replace(/^\s*\d{1,4}\s+/, "")
-    .replace(/\s+\d{1,4}\s*$/, "")
-    .trim();
-}
-
-// Truncate at a sentence boundary near the budget so the snippet doesn't
-// end mid-thought.
-function truncateAtSentence(text, maxChars) {
-  const s = String(text || "");
-  if (s.length <= maxChars) return s;
-  const window = s.slice(0, maxChars);
-  const lastDot = window.lastIndexOf(". ");
-  if (lastDot > maxChars * 0.6) return window.slice(0, lastDot + 1);
-  return window.replace(/\s+\S*$/, "") + "…";
-}
-
-// Build the MOE methodology citation: how the MOE attached to this stat was
-// computed and where the rule comes from. Direct API MOEs cite the companion
-// variable; derived rate MOEs cite the proportion or ratio formula.
-function buildMOEMethodology(variableId) {
-  if (!variableId) return null;
-  const rateMethod = getRateMethodology(variableId);
-  if (rateMethod) {
-    return {
-      kind: rateMethod.kind, // "proportion" | "ratio"
-      formula: rateMethod.formula,
-      description:
-        `Derived from numerator (${variableId}) and denominator ` +
-        `(${rateMethod.denominator}) MOEs using the ACS ${rateMethod.kind} formula.`,
-      sourceLabel: "ACS Statistical Testing guidance — MOE for derived statistics",
-    };
-  }
-  const moeId = String(variableId).replace(/E$/, "M");
-  return {
-    kind: "direct",
-    formula: null,
-    description:
-      `Margin of error reported directly by the Census Bureau on companion ` +
-      `variable ${moeId} (90% confidence interval).`,
-    sourceLabel: "U.S. Census Bureau — ACS published MOE",
-  };
-}
-
-// Build the tableInfo block from the local catalog (docs/tables-index.json).
-// Returns null if the catalog is missing or doesn't contain this table id.
-async function buildTableInfo(variableId, year) {
-  const tableId = String(variableId || "").split("_")[0];
-  if (!tableId) return null;
-  const t = await getTableById(tableId);
-  if (!t) return null;
-  return {
-    tableId: t.tableId,
-    kind: t.kind,
-    kindLabel: t.kindLabel,
-    concept: t.concept,
-    universe: t.universe,
-    releases: t.releases,
-    endpoints: t.endpoints,
-    variableCount: t.variableCount,
-    chunkId: `acs-tables-${t.kind}-${year || 2024}__${t.tableId}`,
-    catalogSource: `Verified against local ACS ${year || 2024} table catalog`,
-  };
-}
-
-// Augment a structured stat payload with deterministic nuance banners,
-// (best-effort) a RAG-fetched methodology passage, the MOE methodology
-// citation, and table-info lifted from the local table catalog. Mutates
-// and returns `structured` for convenience. Never throws — RAG/catalog
-// misses degrade silently.
-async function attachNuancesAndMethodology(structured, variableId) {
-  if (!structured) return structured;
-  // Make sure the raw variableId is present so banner rules can read it.
-  if (variableId && !structured.variableId) structured.variableId = variableId;
-
-  structured.nuances = buildNuanceBanners(structured);
-
-  // Cheap, pure-code MOE methodology block — only attach when we actually
-  // have an MOE to explain.
-  if (structured.moe != null && variableId) {
-    structured.moeMethodology = buildMOEMethodology(variableId);
-  }
-
-  // Run the handbook RAG search and the local table-catalog lookup in
-  // parallel — they're independent and the table lookup is fast.
-  // Methodology search is restricted to authoritative references (Subject
-  // Definitions / Design & Methodology / general+geography handbooks) so
-  // audience-specific handbooks (journalists, congress, etc.) can't outscore
-  // them on BM25 keyword overlap and end up cited as the methodology source.
-  const [methodologyResult, tableInfoResult] = await Promise.allSettled([
-    (async () => {
-      const query = buildMethodologyQuery(variableId, structured.variable);
-      return searchAcsDocs(query, { topK: 1, docFilter: isAuthoritativeMethodologyDoc });
-    })(),
-    buildTableInfo(variableId, structured.year),
-  ]);
-
-  if (methodologyResult.status === "fulfilled") {
-    const top = methodologyResult.value?.results?.[0];
-    if (top && top.score >= RAG_METHODOLOGY_MIN_SCORE) {
-      structured.methodology = {
-        text: truncateAtSentence(stripPageNoise(top.text), RAG_METHODOLOGY_MAX_CHARS),
-        doc_title: top.doc_title,
-        doc_url: top.doc_url,
-        page: top.page,
-        chunk_id: top.chunk_id,
-      };
-    }
-  }
-
-  if (tableInfoResult.status === "fulfilled" && tableInfoResult.value) {
-    structured.tableInfo = tableInfoResult.value;
-  }
-
-  return structured;
 }
 
 // True when the user's geo phrase looks like a "zip NNNNN" reference
@@ -1401,35 +1270,52 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
     const metricLabel = inferTrendMetricLabel(userMsg);
 
     if (!parsed.error && parsed.locationLabel) {
-      const parts = parsed.locationLabel.split(",").map(s => s.trim());
-      const city = parts[0];
-      const state = parts[1];
+      const endYear = Number(CURRENT_ACS_YEAR);
+      const trendResult = await runTrendTool(req, {
+        location: parsed.locationLabel,
+        metric: metricLabel,
+        startYear: endYear - 4,
+        endYear,
+      });
 
-      if (city && state) {
-        const endYear = Number(CURRENT_ACS_YEAR);
-        const trendResult = await runTrendTool(req, {
-          city,
-          state,
+      if (trendResult && Array.isArray(trendResult.points)) {
+        const resolvedLabel = trendResult.locationLabel || parsed.locationLabel;
+        const series = [{
+          label: resolvedLabel,
+          points: trendResult.points
+            .filter(p => p.numericValue != null)
+            .map(p => ({ year: Number(p.year), numericValue: Number(p.numericValue) })),
+        }];
+        const payload = buildTrendChartPayload(series, metricLabel);
+        const warnings = trendResult.points.filter(p => p.warning).map(p => `${p.year}: ${p.warning}`);
+
+        // Same sourcing trail the stat path produces — table-catalog
+        // grounding, MOE methodology (null for trend, since trend.js
+        // doesn't fetch MOEs today), and a methodology citation from
+        // the handbook RAG. Use the canonical variable identity echoed
+        // by /api/trend so the source entry doesn't re-resolve via
+        // parseQuery (which can drop disambiguation).
+        const trendSources = [];
+        const trendEntry = buildTrendSourceEntry({
+          location: resolvedLabel,
           metric: metricLabel,
-          startYear: endYear - 4,
-          endYear,
+          points: series[0].points,
+          variableId: trendResult.variableId,
+          variableLabel: trendResult.variableLabel,
+          unit: trendResult.unit,
+          tableId: trendResult.tableId,
         });
-
-        if (Array.isArray(trendResult)) {
-          const series = [{
-            label: parsed.locationLabel,
-            points: trendResult
-              .filter(p => p.numericValue != null)
-              .map(p => ({ year: Number(p.year), numericValue: Number(p.numericValue) })),
-          }];
-          const payload = buildTrendChartPayload(series, metricLabel);
-          const warnings = trendResult.filter(p => p.warning).map(p => `${p.year}: ${p.warning}`);
-          return res.status(200).json({
-            reply: JSON.stringify(payload),
-            ...(warnings.length > 0 ? { warnings } : {}),
-            ...altsField,
-          });
+        if (trendEntry) {
+          await attachNuancesAndMethodology(trendEntry, trendEntry.variableId);
+          trendSources.push(trendEntry);
         }
+
+        return res.status(200).json({
+          reply: JSON.stringify(payload),
+          ...(warnings.length > 0 ? { warnings } : {}),
+          ...(trendSources.length > 0 ? { sources: trendSources } : {}),
+          ...altsField,
+        });
       }
     }
     // Trend routing couldn't proceed — try the explicit-geo or standard path below.
@@ -1634,6 +1520,11 @@ export default async function handler(req, res) {
     let currentMessages = messages;
     let finalReply = null;
     const trendSeries = []; // collected across tool calls for multi-line comparisons
+    // Captures the canonical variable label echoed by /api/trend so multi-
+    // series free-form trends display the right chart title (otherwise
+    // inferTrendMetricLabel falls back to "Trend" for variables outside
+    // VARIABLE_MAP — e.g. "Vietnamese Alone").
+    let lastTrendVariableLabel = null;
     // Sources trail: every successful stat fetch during the agentic loop is
     // captured here so the response can surface "More information / sourcing"
     // grounding regardless of which UI shape is rendered (single StatCard,
@@ -1711,20 +1602,49 @@ export default async function handler(req, res) {
             if (block.name === TREND_TOOL.name) {
               const latestPrompt = getLatestUserMessage(currentMessages);
               const inferredMetric = inferTrendMetricLabel(latestPrompt);
+              // For curated trends Claude passes `metric`; for free-form
+              // trends it passes `variable_id` + label + unit + table_id.
+              // Either path is fine — runTrendTool forwards both shapes.
+              const metricLabel = block.input?.metric || block.input?.label || inferredMetric;
               result = await runTrendTool(req, {
                 ...block.input,
-                metric: block.input?.metric || inferredMetric,
+                metric: block.input?.variable_id ? undefined : metricLabel,
               });
-              if (Array.isArray(result)) {
-                const city = String(block.input?.city || "").trim();
-                const state = String(block.input?.state || "").trim();
-                trendSeries.push({
-                  label: [city, state].filter(Boolean).join(", ") || "Series",
-                  points: result.map((p) => ({
-                    year: Number(p.year),
-                    numericValue: Number(p.numericValue),
-                  })),
+              if (result && Array.isArray(result.points)) {
+                // Prefer the canonical resolved label echoed by /api/trend;
+                // fall back to whatever Claude passed (location, or
+                // city+state for back-compat with old prompts/conversations).
+                const fallbackLabel =
+                  String(block.input?.location || "").trim() ||
+                  [String(block.input?.city || "").trim(), String(block.input?.state || "").trim()]
+                    .filter(Boolean).join(", ") ||
+                  "Series";
+                const resolvedLabel = result.locationLabel || fallbackLabel;
+                const points = result.points.map((p) => ({
+                  year: Number(p.year),
+                  numericValue: Number(p.numericValue),
+                }));
+                trendSeries.push({ label: resolvedLabel, points });
+                if (result.variableLabel) lastTrendVariableLabel = result.variableLabel;
+                // Trend tool's result is an object (points + locationLabel),
+                // so we can't piggyback `_sourceEntry` on it the way the
+                // stat tools do. Push directly into the loop-level `sources`
+                // array — the post-loop enrichment pass will run
+                // attachNuancesAndMethodology on this entry like any other.
+                // Pass the variable identity echoed by /api/trend so free-form
+                // trends carry the right variable id and label rather than
+                // re-resolving via parseQuery (which would fail for variables
+                // outside VARIABLE_MAP).
+                const trendEntry = buildTrendSourceEntry({
+                  location: resolvedLabel,
+                  metric: metricLabel,
+                  points,
+                  variableId: result.variableId,
+                  variableLabel: result.variableLabel,
+                  unit: result.unit,
+                  tableId: result.tableId,
                 });
+                if (trendEntry) sources.push(trendEntry);
               }
             } else if (block.name === CENSUS_TOOL.name) {
               result = await runCensusTool(block.input);
@@ -1831,7 +1751,10 @@ export default async function handler(req, res) {
 
     if (visualizationRequest) {
       if (trendSeries.length > 0) {
-        const metricLabel = inferTrendMetricLabel(initialUserMsg);
+        // Prefer the variable label echoed by /api/trend (works for both
+        // curated and free-form trends). Fall back to inferTrendMetricLabel
+        // for older flows where variableLabel wasn't surfaced.
+        const metricLabel = lastTrendVariableLabel || inferTrendMetricLabel(initialUserMsg);
         const payload = buildTrendChartPayload(trendSeries, metricLabel);
         return res.status(200).json({ reply: JSON.stringify(payload), ...sourcesField });
       }

@@ -1,16 +1,16 @@
-// scripts/index-acs-tables.mjs — build docs/tables-index.json from the
+// scripts/index-acs-tables.mjs — build acs-data/tables-index.json from the
 // fetched variables.json + groups.json files.
 // Run: npm run index:tables [-- --year=2024]
 //
 // Strategy:
-//   1. Load every (release × kind) pair from docs/raw/tables/<year>/.
+//   1. Load every (release × kind) pair from acs-data/raw/tables/<year>/.
 //   2. Merge by (kind, table id), recording which releases publish each.
 //   3. Pull universe + concept from groups.json — universe lives there only.
 //   4. Emit one chunk per (kind, table id). Body lists concept, universe,
 //      releases, endpoints, and the variable list (capped at MAX_VARS_INLINE).
 //   5. BM25-tokenize using the same tokenizer as the docs index.
 //
-// Output: docs/tables-index.json — same schema shape as docs/index.json
+// Output: acs-data/tables-index.json — same schema shape as acs-data/index.json
 //   so a future loader can mirror lib/acsRag.js cleanly.
 
 import { readFile, writeFile, mkdir, access } from "node:fs/promises";
@@ -25,8 +25,8 @@ const args = process.argv.slice(2);
 const yearArg = args.find(a => a.startsWith("--year="))?.split("=")[1];
 const YEAR = yearArg || "2024";
 
-const RAW_DIR = resolve(PROJECT_ROOT, "docs/raw/tables", YEAR);
-const OUT_PATH = resolve(PROJECT_ROOT, "docs/tables-index.json");
+const RAW_DIR = resolve(PROJECT_ROOT, "acs-data/raw/tables", YEAR);
+const OUT_PATH = resolve(PROJECT_ROOT, "acs-data/tables-index.json");
 
 const MAX_VARS_INLINE = 25;
 
@@ -222,7 +222,7 @@ async function main() {
   }
   console.log(`\nMerged catalog: ${tableMap.size} (kind, table) entries`);
 
-  // Per-kind doc metadata so the index has a docs[] roll-up similar to docs/index.json.
+  // Per-kind doc metadata so the index has a docs[] roll-up similar to acs-data/index.json.
   const docMap = new Map();
   for (const k of TABLE_KINDS) {
     docMap.set(k.kind, {
@@ -281,7 +281,7 @@ async function main() {
     }
   }
 
-  // BM25 prep — same algorithm/shape as docs/index.json
+  // BM25 prep — same algorithm/shape as acs-data/index.json
   console.log(`\nTokenizing ${chunks.length} table chunks…`);
   const df = new Map();
   let totalLen = 0;

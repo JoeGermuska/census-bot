@@ -11,7 +11,6 @@
     "index": "node scripts/index-acs-docs.mjs",
     "fetch:acs-tables": "node scripts/fetch-acs-tables.mjs",
     "index:tables": "node scripts/index-acs-tables.mjs",
-    "derive:alternatives": "node scripts/derive-acs-alternatives.mjs",
     "test:queries": "node scripts/test-chat-queries.mjs"
   },
   "dependencies": {
@@ -29,7 +28,6 @@
     "postcss": "^8.5.14"
   },
   "devDependencies": {
-    "d3-force": "^3.0.0",
     "eslint": "^9",
     "eslint-config-next": "^16.2.4"
   }

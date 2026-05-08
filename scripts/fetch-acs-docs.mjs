@@ -2,8 +2,8 @@
 // Run: npm run fetch:acs-docs
 //
 // Outputs:
-//   docs/raw/pdfs/<id>.pdf
-//   docs/raw/html/<id>.html
+//   acs-data/raw/pdfs/<id>.pdf
+//   acs-data/raw/html/<id>.html
 //
 // Idempotent: skips files that already exist. Pass --force to re-download.
 
@@ -14,8 +14,8 @@ import { PDF_SOURCES, HTML_SOURCES } from "./acs-sources.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "..");
-const PDFS_DIR = resolve(PROJECT_ROOT, "docs/raw/pdfs");
-const HTML_DIR = resolve(PROJECT_ROOT, "docs/raw/html");
+const PDFS_DIR = resolve(PROJECT_ROOT, "acs-data/raw/pdfs");
+const HTML_DIR = resolve(PROJECT_ROOT, "acs-data/raw/html");
 
 const force = process.argv.includes("--force");
 
