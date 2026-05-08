@@ -93,20 +93,11 @@
 /* ── Mode tabs ──────────────────────────────────────────── */
 .modeTabs {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.45rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--c-border);
   flex-shrink: 0;
-}
-
-.modeTabsList {
-  display: flex;
-  gap: 0.45rem;
   flex-wrap: wrap;
-  flex: 1;
-  min-width: 0;
 }
 
 .modeTab {
@@ -488,6 +479,57 @@
   flex-shrink: 0;
   padding: 0.5rem 0 0.25rem;
   border-top: 1px solid var(--c-border);
+}
+
+/* Row that holds the chat input on the left and the New Chat pill on the right */
+.inputRow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.inputRowMain {
+  flex: 1;
+  min-width: 0;
+}
+
+/* New Chat pill — sits to the right of the chat input box */
+.newChatPill {
+  flex-shrink: 0;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text-dim);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.newChatPill:hover {
+  color: var(--c-text);
+  border-color: var(--c-border-hover);
+  background: var(--c-surface-2);
+}
+
+@media (max-width: 560px) {
+  .inputRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
+  }
+
+  .newChatPill {
+    align-self: flex-end;
+    padding: 0.4rem 0.9rem;
+  }
 }
 
 /* ── Responsive ──────────────────────────────────────────── */

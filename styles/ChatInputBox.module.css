@@ -23,10 +23,9 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
 }
 
-/* Focused state — purple accent */
+/* Focused state — subtle border darken, no glow ring */
 .inputBoxFocused {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--border-hover);
 }
 
 /* ── Textarea ─────────────────────────────────────────────────────────────── */
@@ -52,6 +51,13 @@
 .textarea::placeholder {
   color: var(--text-dim);
   opacity: 0.9;
+}
+
+.textarea:focus,
+.textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-radius: 0;
 }
 
 .textarea:disabled {

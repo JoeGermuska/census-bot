@@ -876,26 +876,19 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {/* Mode tabs row — modes on the left, New Chat on the right */}
+          {/* Mode tabs row */}
           <div className={styles.modeTabs}>
-            <div className={styles.modeTabsList}>
-              {MODES.map(m => (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={`${styles.modeTab} ${mode === m.id ? styles.modeTabActive : ""}`}
-                  onClick={() => selectMode(m.id)}
-                >
-                  <span className={styles.modeTabIcon}><m.Icon /></span>
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            {messages.length > 0 && (
-              <button type="button" className={styles.clearBtn} onClick={clearChat}>
-                ← New Chat
+            {MODES.map(m => (
+              <button
+                key={m.id}
+                type="button"
+                className={`${styles.modeTab} ${mode === m.id ? styles.modeTabActive : ""}`}
+                onClick={() => selectMode(m.id)}
+              >
+                <span className={styles.modeTabIcon}><m.Icon /></span>
+                {m.label}
               </button>
-            )}
+            ))}
           </div>
 
           <div className={styles.chatInner}>
@@ -1013,20 +1006,27 @@ export default function ChatPage() {
                 {atLimit ? (
                   <div className={styles.limitReached}>
                     Conversation limit reached.{" "}
-                    <button type="button" className={styles.clearBtn} onClick={clearChat}>
-                      ← New Chat
+                    <button type="button" className={styles.newChatPill} onClick={clearChat}>
+                      New Chat
                     </button>
                   </div>
                 ) : (
-                  <ChatInputBox
-                    ref={textareaRef}
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onSend={() => sendMessage()}
-                    loading={loading}
-                    disabled={atLimit}
-                    placeholder={activeMode.placeholder}
-                  />
+                  <div className={styles.inputRow}>
+                    <div className={styles.inputRowMain}>
+                      <ChatInputBox
+                        ref={textareaRef}
+                        value={input}
+                        onChange={e => setInput(e.target.value)}
+                        onSend={() => sendMessage()}
+                        loading={loading}
+                        disabled={atLimit}
+                        placeholder={activeMode.placeholder}
+                      />
+                    </div>
+                    <button type="button" className={styles.newChatPill} onClick={clearChat}>
+                      New Chat
+                    </button>
+                  </div>
                 )}
                 <div className={styles.msgCounter}>{Math.floor(messages.length / 2)} / {MAX_EXCHANGES} messages used</div>
               </div>

@@ -4,7 +4,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { parseQuery, parseVariableOnly, formatValue, detectAmbiguousMetric, STATE_FIPS } from "../../lib/censusTranslator";
-import { fetchCensusValue, fetchCensusValueWithMOE, fetchCensusValueWithMOEAndFallback } from "../../lib/censusApi";
+import { fetchCensusValue, fetchCensusValueWithMOEAndFallback } from "../../lib/censusApi";
 import { QUERY_TYPES, CURRENT_ACS_YEAR } from "../../lib/censusConstants";
 import { computeRateIfNeeded, getRateDenominator, getRateMethodology } from "../../lib/censusRates";
 import { getTableById } from "../../lib/acsTablesRag";
@@ -671,14 +671,25 @@ async function runCensusTool(toolInput) {
     if (parsed.error) return { error: parsed.error };
 
     const { variable, geoParams, locationLabel } = parsed;
-    const { value: rawValue, moe: rawMOE } = await fetchCensusValueWithMOE(variable.id, geoParams, censusApiKey);
+    // Prefer 1-Year, fall back to 5-Year only when 1-Year can't deliver — same
+    // dataset-selection logic as the fast path and the free-form variable tool.
+    const fetchResult = await fetchCensusValueWithMOEAndFallback(variable.id, geoParams, censusApiKey, {
+      year: CURRENT_ACS_YEAR,
+    });
+    const rawValue = fetchResult.value;
+    const rawMOE = fetchResult.moe;
+    const dataset = fetchResult.dataset;
+    const fallbackReason = fetchResult.fallbackReason || null;
 
     const rateResult = await computeRateIfNeeded(variable.id, rawValue, geoParams, censusApiKey, {
+      year: CURRENT_ACS_YEAR,
+      dataset: datasetPath(dataset),
       numeratorMOE: rawMOE,
     });
     const finalFormat = rateResult ? rateResult.format : variable.format;
     const finalValue = rateResult ? rateResult.value : rawValue;
     const finalMOE = rateResult ? rateResult.moe : rawMOE;
+    const sourceLabel = buildSourceLabel(dataset, CURRENT_ACS_YEAR);
 
     // The `_sourceEntry` field is stripped before the result is forwarded to
     // Claude — it carries the raw, structured form of this fetch so the
@@ -690,19 +701,22 @@ async function runCensusTool(toolInput) {
       value: formatValue(finalValue, finalFormat),
       moe: formatMOE(finalMOE, finalFormat),
       location: locationLabel,
-      source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
+      source: `${sourceLabel}, U.S. Census Bureau`,
+      dataset,
+      ...(fallbackReason ? { fallback_reason: fallbackReason } : {}),
       _sourceEntry: {
         kind: "stat",
         variableId: variable.id,
         variable: variable.label,
         place: locationLabel,
         year: Number(CURRENT_ACS_YEAR),
-        dataset: "acs5",
+        dataset,
         value: parseFloat(finalValue),
         moe: finalMOE != null ? parseFloat(finalMOE) : null,
         moeFormatted: formatMOE(finalMOE, finalFormat),
         unit: finalFormat,
-        source: `ACS 5-Year Estimates (${CURRENT_ACS_YEAR}), U.S. Census Bureau`,
+        source: `${sourceLabel}, U.S. Census Bureau`,
+        ...(fallbackReason ? { fallbackReason } : {}),
         tables: buildSourceTables(variable.id),
       },
     };

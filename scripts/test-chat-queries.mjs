@@ -71,6 +71,35 @@ const CASES = [
     query: "median household income in California",
     expects: { hasStructured: true, dataset: "acs1", noFallbackReason: true },
   },
+  // ── Regression coverage for the third dispatch path ─────────────────────
+  // These queries match curated metrics (so VARIABLE_MAP knows them) but use
+  // phrasings that miss parseVariableOnly's exact match (location not preceded
+  // by " in ", or extra content tokens). The fast path falls through to Claude,
+  // which calls lookup_census_data (the CURATED tool). That tool used to call
+  // fetchCensusValueWithMOE without fallback → always returned 5-year, even
+  // for 1-year-eligible places. Bug fixed; these tests pin it down.
+  {
+    name: "Curated metric via Claude tool → still 1-year (Toledo transit, awkward phrasing)",
+    category: "dataset",
+    query: "What share of Toledo workers use public transit?",
+    expects: {
+      // No top-level structured (Claude tool path emits sources, not structured).
+      sourceDataset: "acs1",
+      sourceVariableId: "B08301_010E",
+      // 1-year ratio for Toledo is ~0.84%; 5-year was 1.08%. Range excludes 5-year.
+      sourceValueRange: { min: 0.4, max: 1.0 },
+    },
+  },
+  {
+    name: "Curated metric via Claude tool → 1-year (Cincinnati income, possessive phrasing)",
+    category: "dataset",
+    query: "What is Cincinnati's median household income?",
+    expects: {
+      // Cincinnati ~310K, 1-year eligible. Whichever path serves it (sources
+      // or structured), the dataset must be acs1.
+      eitherDataset: "acs1",
+    },
+  },
 
   // ── Category: geo resolution ────────────────────────────────────────────
   {
@@ -337,6 +366,56 @@ async function runOne(testCase) {
 
   if (e.methodology === true && (!s || !s.methodology)) {
     fails.push("expected structured.methodology, got none");
+  }
+
+  // Assertions on the sources[] trail (Claude-mediated tool path emits
+  // `sources` instead of top-level `structured`). Used to catch regressions
+  // where the curated tool routes via Claude and we'd otherwise miss bugs
+  // localized to that path (e.g. always returning 5-year).
+  const firstStat = Array.isArray(response.sources)
+    ? response.sources.find(x => x.kind === "stat")
+    : null;
+
+  if (e.sourceDataset) {
+    if (!firstStat) fails.push(`expected a stat source, got none (sources=${JSON.stringify(response.sources)?.slice(0, 200)})`);
+    else if (firstStat.dataset !== e.sourceDataset) {
+      fails.push(`source dataset mismatch: expected ${e.sourceDataset}, got ${firstStat.dataset}`);
+    }
+  }
+
+  if (e.sourceVariableId) {
+    if (!firstStat) fails.push("expected a stat source, got none");
+    else if (firstStat.variableId !== e.sourceVariableId) {
+      fails.push(`source variableId mismatch: expected ${e.sourceVariableId}, got ${firstStat.variableId}`);
+    }
+  }
+
+  if (e.sourceValueRange) {
+    if (!firstStat) fails.push("expected a stat source, got none");
+    else {
+      const v = parseFloat(firstStat.value);
+      if (!Number.isFinite(v)) fails.push(`source value not numeric: ${firstStat.value}`);
+      else {
+        if (e.sourceValueRange.min != null && v < e.sourceValueRange.min) {
+          fails.push(`source value ${v} < min ${e.sourceValueRange.min}`);
+        }
+        if (e.sourceValueRange.max != null && v > e.sourceValueRange.max) {
+          fails.push(`source value ${v} > max ${e.sourceValueRange.max}`);
+        }
+      }
+    }
+  }
+
+  // eitherDataset checks both `structured.dataset` and the first stat
+  // source's `dataset`, passing if EITHER is the expected value. Used when
+  // the routing (fast path vs Claude-curated vs free-form) is non-deterministic
+  // but we only care about the dataset choice, not the path.
+  if (e.eitherDataset) {
+    const sd = s?.dataset;
+    const srd = firstStat?.dataset;
+    if (sd !== e.eitherDataset && srd !== e.eitherDataset) {
+      fails.push(`expected dataset ${e.eitherDataset} on either structured or sources[0]; got structured=${sd} sources[0]=${srd}`);
+    }
   }
 
   return { pass: fails.length === 0, fails, response };
