@@ -693,7 +693,7 @@ function SourcesBlock({ sources, docMap }) {
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function ChatPage() {
-  const [mode, setMode] = useState(null); // null = show mode picker
+  const [mode, setMode] = useState("statistic");
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -869,43 +869,34 @@ export default function ChatPage() {
         <div className={styles.chatPage}>
 
           {/* Header */}
-          <div className={`${styles.header} ${mode === null ? styles.headerCentered : ""}`}>
-            <div className={`${styles.headerLeft} ${mode === null ? styles.headerLeftCentered : ""}`}>
-              <h1 className={styles.title}>
-                Ask a Question
-                {activeMode && <span className={styles.modeInlineLabel}> — {activeMode.label}</span>}
-              </h1>
-              <p className={styles.subtitle}>
-                {activeMode ? activeMode.description : "Choose how you want to explore Census data."}
-              </p>
+          <div className={styles.header}>
+            <div className={styles.headerLeft}>
+              <h1 className={styles.title}>Ask a Question</h1>
+              <p className={styles.subtitle}>{activeMode?.description}</p>
             </div>
-            {(mode !== null) && (
+            {messages.length > 0 && (
               <button type="button" className={styles.clearBtn} onClick={clearChat}>
                 ← New Chat
               </button>
             )}
           </div>
 
-          {/* Mode picker — shown when no mode selected */}
-          {mode === null ? (
-            <div className={styles.modePicker}>
-              <div className={styles.modeGrid}>
-                {MODES.map(m => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={styles.modeCard}
-                    onClick={() => selectMode(m.id)}
-                  >
-                    <span className={styles.modeIcon}><m.Icon /></span>
-                    <span className={styles.modeLabel}>{m.label}</span>
-                    <span className={styles.modeDesc}>{m.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className={styles.chatInner}>
+          {/* Mode tabs */}
+          <div className={styles.modeTabs}>
+            {MODES.map(m => (
+              <button
+                key={m.id}
+                type="button"
+                className={`${styles.modeTab} ${mode === m.id ? styles.modeTabActive : ""}`}
+                onClick={() => selectMode(m.id)}
+              >
+                <span className={styles.modeTabIcon}><m.Icon /></span>
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          <div className={styles.chatInner}>
               {/* Message list — or spacer when empty */}
               {messages.length === 0 && !loading ? (
                 <div className={styles.emptyState} />
@@ -1034,7 +1025,6 @@ export default function ChatPage() {
                 <div className={styles.msgCounter}>{Math.floor(messages.length / 2)} / {MAX_EXCHANGES} messages used</div>
               </div>
             </div>
-          )}
         </div>
       </SiteLayout>
     </>

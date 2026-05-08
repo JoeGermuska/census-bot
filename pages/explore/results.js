@@ -425,7 +425,7 @@ export default function ExploreResults() {
           <section className={ex.resultsSection} aria-label="Query results">
             <h2 className={ex.resultsTitle}>Results</h2>
             {loading ? (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "1.5rem" }}>
+              <div className={ex.resultGrid}>
                 {Array.from({ length: metrics.length || 3 }).map((_, i) => (
                   <div key={i} style={{ height: 180, borderRadius: 20, background: "var(--surface)", border: "1px solid var(--border)", opacity: 0.5 + (i * 0.15), animation: "pulse 1.4s ease-in-out infinite", animationDelay: `${i * 120}ms` }} />
                 ))}
