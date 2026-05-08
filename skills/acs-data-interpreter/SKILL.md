@@ -3,6 +3,17 @@
 ## Purpose
 Turn raw ACS numbers into accurate, well-contextualized findings. Covers how to read Census values correctly, when to caveat findings, how to adjust for inflation, and how to write interpretive summaries.
 
+## Sourcing Census Bureau facts
+
+**Before stating any specific Census threshold, suppression rule, or release-cadence detail, call `search_acs_docs`** with the relevant query (e.g. "1-year publication threshold", "estimate suppression rules", "coefficient of variation thresholds"). Quote the official text with the chunk_id citation.
+
+The authoritative documents are indexed and searchable:
+- `ACS_Data_Release_Rules.pdf` — population thresholds, suppression criteria, table availability rules
+- `acs_design_methodology_report_2024.pdf` — sampling, weighting, MOE/CV definitions, edit/imputation rules
+- `2022_ACSSubjectDefinitions.pdf` — concept and universe definitions for every published variable
+
+**Do not paraphrase specific numerical thresholds from memory.** They change between vintages and are exactly the kind of detail this skill should defer to RAG for. The interpretive rules below are stable; the specific numbers underneath them belong in the docs.
+
 ## Core Interpretation Rules
 
 ### Rule 1: Always Check the Margin of Error
@@ -15,10 +26,12 @@ B25064_001M = ±$43   (90% confidence interval)
 This means the true median rent is $1,847 ± $43 with 90% confidence.
 ```
 
-**When to flag MOE concerns:**
-- MOE > 10% of the estimate → note in your output
-- MOE > 30% of the estimate → warn that the estimate is unreliable
-- Small geographies (counties < 100k, census tracts) → always show MOE
+**When to flag MOE concerns** (practical rules of thumb, not Census-mandated thresholds):
+- MOE is a notable share of the estimate → note in your output
+- MOE is comparable to or larger than the estimate → warn that the estimate is unreliable
+- Small geographies (small counties, census tracts, CDPs) → always show MOE
+
+For the Bureau's published reliability thresholds, call `search_acs_docs` with "coefficient of variation" or "data quality thresholds".
 
 ### Rule 2: Sentinel Values
 The Census uses specific codes for missing/unavailable data. **Never display these as real numbers:**
@@ -66,24 +79,22 @@ A percent rate's MOE is in **percentage points**, not percent. Display it as "±
 
 ## Suppression & Reliability
 
-### Coefficient of variation (CV) rules of thumb
+### Coefficient of variation (CV)
 `CV = MOE / (1.645 × estimate)` — the 1.645 converts the 90% CI MOE into a standard error.
 
-- **CV < 12%** → reliable; use the number directly.
-- **CV 12–40%** → caveat in narrative ("this estimate has a wide margin of error").
-- **CV > 40%** → don't lead with the number. Suggest a larger geography or warn the user the estimate is unreliable.
+CV is the more rigorous reliability check (vs. Rule 1's MOE-as-% heuristic). The Bureau publishes specific CV thresholds for "reliable", "caveat-worthy", and "unreliable" classifications — **call `search_acs_docs` with "coefficient of variation thresholds" before quoting them**, since they vary by table type and have been refined across vintages.
 
-CV is a more rigorous version of Rule 1's "MOE as % of estimate" threshold; both give similar answers in practice.
+In practice: low CV → use the number directly; mid CV → caveat in narrative; high CV → don't lead with the number, suggest a larger geography or flag unreliability.
 
 ### When to prefer 5-year over 1-year
-- Geography population < 65,000 → 1-year isn't published; 5-year is the only option.
-- 1-year MOE > 30% of estimate → 5-year usually has tighter MOE; prefer it.
-- Trend questions crossing 2020 → 5-year smooths the COVID-era single-year spike.
+- Geography is below the Bureau's 1-year publication threshold → 1-year isn't published; 5-year is the only option. (Call `search_acs_docs` for "1-year publication threshold" to quote the exact population cutoff.)
+- 1-year MOE is large relative to the estimate → 5-year usually has tighter MOE; prefer it.
+- Trend questions crossing 2020 → 5-year smooths the COVID-era single-year disruption.
 - Small subgroup (e.g. one race × one age bracket × one place) → 5-year reduces sampling variance.
 
 ### Why an estimate might be missing
 The Bureau suppresses a value when:
-- Sample size in the cell is too small (typical floor: ~50 unweighted cases).
+- Sample size in the cell falls below the Bureau's quality threshold (call `search_acs_docs` for "data suppression rules" to quote the exact criterion — it's based on unweighted cases and CV, not a single round number).
 - Disclosure rules would let an individual be identified.
 - The value is top-coded (income or age ceilings) — returned as sentinel `-333333333`.
 

@@ -44,4 +44,6 @@ docs/raw/
 pages/test/metric-graph.js
 pages/api/graph-layout.js
 scripts/build-graph-layout.mjs
+scripts/derive-acs-alternatives.mjs
 lib/graphLayout.json
+lib/acsAlternatives.json
