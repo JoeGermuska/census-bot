@@ -304,6 +304,67 @@
     padding: 0.58rem 0.95rem;
     border-radius: 10px;
   }
+
+  /* Reduce stat card padding on narrow screens */
+  .card {
+    padding: 1.25rem 1rem 1.1rem;
+    border-radius: 14px;
+  }
+
+  .statCard {
+    padding: 1.25rem 1.1rem 1rem;
+    border-radius: 14px;
+  }
+
+  .statValue {
+    font-size: clamp(1.8rem, 8vw, 2.5rem);
+  }
+
+  .compareCard {
+    padding: 1rem 1rem 1rem;
+    border-radius: 12px;
+  }
+
+  .metricGroupLabel {
+    font-size: 0.74rem;
+  }
+
+  .metricGroupHeader {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .btnCompare {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .compareSection {
+    flex-direction: column;
+  }
+
+  .compareActions {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .compareActions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .resultsSection {
+    margin-top: 1.25rem;
+  }
+
+  .btnStartNew {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .bottomActions {
+    padding-bottom: 1.5rem;
+  }
 }
 
 .choice:hover {

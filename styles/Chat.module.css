@@ -473,30 +473,32 @@
     max-height: calc(100vh - 15rem);
   }
 
+  .header {
+    padding: 0.85rem 0 0.5rem;
+  }
+
+  .title {
+    font-size: 1.15rem;
+  }
+
+  .modeTabs {
+    gap: 0.35rem;
+    padding-bottom: 0.6rem;
+  }
+
+  .modeTab {
+    font-size: 0.78rem;
+    padding: 0.35rem 0.75rem;
+    gap: 0.3rem;
+  }
+
+  .modeTab svg {
+    width: 14px;
+    height: 14px;
+  }
+
   .bubbleUser {
     max-width: 88%;
-  }
-
-  .modeGrid {
-    grid-template-columns: 1fr;
-    max-width: 100%;
-  }
-
-  .modeCard {
-    flex-direction: row;
-    gap: 0.75rem;
-    text-align: left;
-    padding: 1.25rem;
-  }
-
-  .modeIcon { font-size: 1.6rem; }
-  .modeLabel { font-size: 1.4rem; }
-  .modeDesc { display: block; font-size: 1rem; }
-
-  .modePickerLabel {
-    font-size: 1.35rem;
-    text-align: center;
-    padding: 0 1rem;
   }
 
   /* Prevents iOS Safari from zooming the page when the textarea is focused */
@@ -516,21 +518,36 @@
 
 /* Very small phones */
 @media (max-width: 480px) {
-  .modePickerLabel {
-    font-size: 1.1rem;
+  .chatPage {
+    height: calc(100vh - 13rem);
+    max-height: calc(100vh - 13rem);
   }
 
-  .modeCard {
-    padding: 0.9rem 1rem;
-    gap: 0.5rem;
+  .header {
+    padding: 0.65rem 0 0.4rem;
   }
 
-  .modeLabel {
-    font-size: 1.15rem;
+  .title {
+    font-size: 1.05rem;
   }
 
-  .modeDesc {
-    font-size: 0.82rem;
+  .subtitle {
+    font-size: 0.75rem;
+  }
+
+  .clearBtn {
+    font-size: 0.72rem;
+    padding: 0.32rem 0.7rem;
+  }
+
+  .modeTabs {
+    gap: 0.28rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .modeTab {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.6rem;
   }
 
   .bubble {
@@ -542,22 +559,22 @@
     max-width: 94%;
   }
 
-  .inputRow {
-    padding: 0.45rem 0.45rem 0.45rem 0.85rem;
+  .suggestion {
+    font-size: 0.76rem;
+    padding: 0.5rem 0.85rem;
   }
 
-  .sendBtn {
-    width: 38px;
-    height: 38px;
-    border-radius: 8px;
+  .inputArea {
+    padding: 0.5rem 0 0.75rem;
   }
+}
 
-  .inputHint {
-    font-size: 0.68rem;
-  }
-
-  .modeBadge {
-    font-size: 0.7rem;
+@supports (height: 100dvh) {
+  @media (max-width: 480px) {
+    .chatPage {
+      height: calc(100dvh - 13rem);
+      max-height: calc(100dvh - 13rem);
+    }
   }
 }
 
