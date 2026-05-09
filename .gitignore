@@ -41,3 +41,11 @@ acs-data/raw/
 # Local-only IPUMS testing sandbox — never committed.
 # Contains IPUMS API key in .env and downloaded NHGIS extracts.
 ipums-sandbox/
+
+# Local-only experimental historical-data chat route. Lives on disk for the
+# dev server to pick up; never committed, never deployed. To promote, copy
+# the relevant pieces into the real chat.js and remove these gitignore lines.
+pages/chat-experimental.js
+pages/api/chat-experimental.js
+lib/historicalCensus.js
+lib/historicalCensus.json

@@ -404,6 +404,51 @@ function SourceTrail({ sources }) {
   );
 }
 
+// ChartMethodologyNote — renders the trend tool's seriesWarning OUTSIDE the
+// chart component so the graph itself stays uncluttered. Two visual modes:
+//  • severity="info"  (blue-tinted)  — successful per-vintage variable
+//                                       remap; informational, no action needed.
+//  • severity="warning" (amber)      — comparability is genuinely at risk
+//                                       (undocumented jumps, unsuccessful remap).
+function ChartMethodologyNote({ warning }) {
+  if (!warning) return null;
+  const isInfo = warning.severity === "info";
+  const palette = isInfo
+    ? { bg: "rgba(77,184,255,0.06)", bar: "rgba(77,184,255,0.5)", icon: "ℹ", labelColor: "#1a4480" }
+    : { bg: "rgba(255,176,77,0.08)", bar: "rgba(255,176,77,0.55)", icon: "⚠", labelColor: "#a86b16" };
+  return (
+    <div style={{
+      marginTop: 12,
+      display: "flex",
+      gap: 10,
+      padding: "10px 12px",
+      background: palette.bg,
+      borderLeft: `3px solid ${palette.bar}`,
+      borderRadius: "0 6px 6px 0",
+      fontSize: 12,
+      lineHeight: 1.55,
+      color: "var(--chart-tick)",
+    }}>
+      <span style={{ fontWeight: 700, color: palette.labelColor, flexShrink: 0 }}>
+        {palette.icon} {isInfo ? "Methodology note" : "Comparability warning"}
+      </span>
+      <span>
+        {warning.headline ? <strong>{warning.headline}. </strong> : null}
+        {warning.message}
+        {warning.tableSource && (
+          <>
+            {" "}
+            <a href={warning.tableSource} target="_blank" rel="noopener noreferrer"
+               style={{ color: palette.labelColor, fontWeight: 600 }}>
+              Census source ↗
+            </a>
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
 function StatCard({ structured }) {
   const [methOpen, setMethOpen] = useState(false);
   if (!structured) return null;
@@ -926,7 +971,16 @@ export default function ChatPage() {
                         }`}>
                           {msg.role === "assistant" ? (
                             isTrendChart ? (
-                              <TrendChart data={parsed} />
+                              <>
+                                <TrendChart data={parsed} />
+                                {/* Methodology / series-redesign banner —
+                                    rendered OUTSIDE the chart so the graph
+                                    itself stays clean. Picks up the same
+                                    seriesWarnings shape /api/trend produces. */}
+                                {Array.isArray(parsed.seriesWarnings) && parsed.seriesWarnings.length > 0 && (
+                                  <ChartMethodologyNote warning={parsed.seriesWarnings[0]} />
+                                )}
+                              </>
                             ) : isChartError ? (
                               parsed.message
                             ) : isClarification ? (

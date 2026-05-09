@@ -41,8 +41,8 @@ Neither key is ever sent to the browser.
 ### Skills system (`skills/`)
 Markdown files injected into the Claude system prompt at runtime. Two are always loaded; the rest are conditionally loaded based on keyword matching in the user's message:
 - **Always on:** `acs-general/ACS_SKILL.md`, `humanize/Humanize_SKILL.md`
-- **Conditional:** `acs-data-interpreter`, `acs-geography`, `acs-table-selector`, `acs-housing-migration`, `acs-api-builder`, `acs-temporal-caveats`
-- **Mode-specific:** `learn`, `statistic`, `visualize` modes each pull a fixed subset of skills
+- **Conditional:** `acs-data-interpreter`, `acs-geography`, `acs-table-selector`, `acs-api-builder`, `acs-variable-definitions`, `acs-temporal-caveats`
+- **Mode-specific:** `learn`, `statistic`, `visualize` modes each pull a fixed subset of skills (`visualize` adds `acs-react-chart`)
 
 Skills are cached at module load time (`_skillCache` Map) so files are only read once per cold start.
 

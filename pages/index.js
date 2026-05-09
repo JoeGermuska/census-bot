@@ -2,7 +2,6 @@
 import Head from "next/head";
 import Link from "next/link";
 import SiteLayout from "../components/SiteLayout";
-import ShimmerText from "../components/ShimmerText";
 import landing from "../styles/Landing.module.css";
 
 const S = { width:16, height:16, viewBox:"0 0 24 24", fill:"none", stroke:"currentColor", strokeWidth:2, strokeLinecap:"round", strokeLinejoin:"round", "aria-hidden":true };
@@ -39,9 +38,7 @@ export default function Home() {
         <div className={landing.pageWrapper}>
           <div className={landing.pageContent}>
             <section className={landing.hero}>
-              <h1 className={landing.title}>
-                <ShimmerText>CensusBot</ShimmerText>
-              </h1>
+              <h1 className={landing.title}>CensusBot</h1>
               <p className={landing.leadStrong}>
                 Ask questions about U.S. community data in plain English.
               </p>

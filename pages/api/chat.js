@@ -71,10 +71,6 @@ const CONDITIONAL_SKILLS = [
     keywords: ["table", "variable", "b19013", "b25064", "b25070", "b07", "which table", "what table", "acs table", "dataset"],
   },
   {
-    file: path.join(SKILLS_DIR, "acs-housing-migration", "SKILL.md"),
-    keywords: ["migrat", "mov", "california", "left", "relocat", "out-migrant", "housing cost", "afford", "rent burden", "where people"],
-  },
-  {
     file: path.join(SKILLS_DIR, "acs-api-builder", "SKILL.md"),
     keywords: ["api", "url", "endpoint", "fetch", "request", "query string", "build", "construct", "http"],
   },
@@ -172,8 +168,14 @@ const TREND_TOOL = {
         type: "string",
         description: "Optional: divide the variable by this denominator (variable ID) and return percent. Use only when the user explicitly asks for a share over time.",
       },
-      startYear: { type: "number" },
-      endYear: { type: "number" },
+      startYear: {
+        type: "number",
+        description: `First year of the trend window. ACS 5-Year coverage starts at 2009.`,
+      },
+      endYear: {
+        type: "number",
+        description: `Last year of the trend window. The latest ACS 5-Year vintage is ${CURRENT_ACS_YEAR} — pass that unless the user asks for an older endpoint.`,
+      },
     },
     required: ["location", "startYear", "endYear"],
   },
@@ -283,6 +285,15 @@ const BASE_SYSTEM_PROMPT = `You are a knowledgeable U.S. Census data assistant b
 You help users understand American Community Survey (ACS) data — income, rent, population, poverty rates, employment, age, and commute times for U.S. cities.
 
 You have access to a live Census data lookup tool. Use it proactively when a user asks about specific metrics for a city/state — don't describe what you could look up, just call the tool and return the real number.
+
+CURRENT ACS DATA YEAR: ${CURRENT_ACS_YEAR}.
+- The most recent published ACS 1-Year vintage is ${CURRENT_ACS_YEAR}.
+- The most recent ACS 5-Year vintage covers ${Number(CURRENT_ACS_YEAR) - 4}–${CURRENT_ACS_YEAR}.
+- When the user says "latest", "current", "now", "this year", or asks about trends without
+  specifying years, anchor your reasoning to ${CURRENT_ACS_YEAR}. Do NOT default to ${Number(CURRENT_ACS_YEAR) - 1}
+  or earlier from your training data — ${CURRENT_ACS_YEAR} is published and available.
+- For trend windows, prefer endYear=${CURRENT_ACS_YEAR}; pick startYear based on how
+  many years the user wants (default to 10 unless they specify).
 
 Available metrics: ${QUERY_TYPES.join(", ")}.
 
@@ -831,12 +842,25 @@ function inferTrendMetricLabel(userMessage) {
   return "Trend";
 }
 
-function buildTrendChartPayload(trendSeries, metricLabel) {
+function buildTrendChartPayload(trendSeries, metricLabel, seriesWarnings = []) {
   // trendSeries: [{ label, points: [{year, numericValue}] }]
   const allYears = trendSeries.flatMap((s) => s.points.map((p) => p.year));
   const yearRange = allYears.length
     ? `${Math.min(...allYears)}–${Math.max(...allYears)}`
     : "";
+
+  // De-duplicate warnings — when multiple cities trigger the same concept-shift
+  // detection (typically because the variable's redefinition affects every
+  // geography), we only want to show the banner once.
+  const uniqueWarnings = [];
+  const seen = new Set();
+  for (const w of seriesWarnings) {
+    if (!w) continue;
+    const key = `${w.kind}:${w.year}:${w.prevYear}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueWarnings.push(w);
+  }
 
   return {
     type: "trend_chart",
@@ -853,6 +877,7 @@ function buildTrendChartPayload(trendSeries, metricLabel) {
     source: yearRange
       ? `U.S. Census Bureau ACS 5-Year Estimates (${yearRange})`
       : "U.S. Census Bureau ACS 5-Year Estimates",
+    ...(uniqueWarnings.length > 0 ? { seriesWarnings: uniqueWarnings } : {}),
   };
 }
 
@@ -1286,7 +1311,11 @@ async function handleStatisticModeFastPath(req, res, userMsg, mode, opts = {}) {
             .filter(p => p.numericValue != null)
             .map(p => ({ year: Number(p.year), numericValue: Number(p.numericValue) })),
         }];
-        const payload = buildTrendChartPayload(series, metricLabel);
+        const payload = buildTrendChartPayload(
+          series,
+          metricLabel,
+          trendResult.seriesWarning ? [trendResult.seriesWarning] : []
+        );
         const warnings = trendResult.points.filter(p => p.warning).map(p => `${p.year}: ${p.warning}`);
 
         // Same sourcing trail the stat path produces — table-catalog
@@ -1520,6 +1549,9 @@ export default async function handler(req, res) {
     let currentMessages = messages;
     let finalReply = null;
     const trendSeries = []; // collected across tool calls for multi-line comparisons
+    // Concept-shift warnings raised by /api/trend's series-level detection.
+    // De-duplicated downstream in buildTrendChartPayload.
+    const trendSeriesWarnings = [];
     // Captures the canonical variable label echoed by /api/trend so multi-
     // series free-form trends display the right chart title (otherwise
     // inferTrendMetricLabel falls back to "Trend" for variables outside
@@ -1626,6 +1658,7 @@ export default async function handler(req, res) {
                 }));
                 trendSeries.push({ label: resolvedLabel, points });
                 if (result.variableLabel) lastTrendVariableLabel = result.variableLabel;
+                if (result.seriesWarning) trendSeriesWarnings.push(result.seriesWarning);
                 // Trend tool's result is an object (points + locationLabel),
                 // so we can't piggyback `_sourceEntry` on it the way the
                 // stat tools do. Push directly into the loop-level `sources`
@@ -1755,7 +1788,7 @@ export default async function handler(req, res) {
         // curated and free-form trends). Fall back to inferTrendMetricLabel
         // for older flows where variableLabel wasn't surfaced.
         const metricLabel = lastTrendVariableLabel || inferTrendMetricLabel(initialUserMsg);
-        const payload = buildTrendChartPayload(trendSeries, metricLabel);
+        const payload = buildTrendChartPayload(trendSeries, metricLabel, trendSeriesWarnings);
         return res.status(200).json({ reply: JSON.stringify(payload), ...sourcesField });
       }
       return res.status(200).json({ reply: JSON.stringify(chartErrorPayload()), ...sourcesField });

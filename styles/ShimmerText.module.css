@@ -1,6 +1,0 @@
-/* Static, single-color title — no shimmer animation. */
-
-.root {
-  display: inline-block;
-  color: var(--accent);
-}

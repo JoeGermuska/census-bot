@@ -11,6 +11,8 @@
     "index": "node scripts/index-acs-docs.mjs",
     "fetch:acs-tables": "node scripts/fetch-acs-tables.mjs",
     "index:tables": "node scripts/index-acs-tables.mjs",
+    "fetch:per-year-vars": "node scripts/fetch-per-year-variables.mjs",
+    "index:per-year-vars": "node scripts/index-per-year-variables.mjs",
     "test:queries": "node scripts/test-chat-queries.mjs"
   },
   "dependencies": {
