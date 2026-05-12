@@ -81,15 +81,6 @@ function SourceFooter({ source, metric, city, stateName }) {
   );
 }
 
-function CardSpinner() {
-  return (
-    <span style={{
-      display: "inline-block", width: 13, height: 13,
-      border: "2px solid var(--border)", borderTopColor: "var(--accent)",
-      borderRadius: "50%", animation: "spin 0.6s linear infinite", verticalAlign: "middle",
-    }} />
-  );
-}
 
 // ── Shared place search (same UX as location.js) ─────────────────────────────
 function PlaceSearch({ city, stateName, onSelect, label, inputId }) {
@@ -232,8 +223,9 @@ export default function ExploreResults() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [trendByQuery, setTrendByQuery] = useState({});
-  const [trendLoadingKey, setTrendLoadingKey] = useState(null);
+  const [trendLoadingKeys, setTrendLoadingKeys] = useState(new Set());
   const [showTrendMap, setShowTrendMap] = useState({});
+  const [allTrendsLoading, setAllTrendsLoading] = useState(false);
 
   // Compare state
   const [showCompare, setShowCompare] = useState(false);
@@ -325,7 +317,7 @@ export default function ExploreResults() {
   }
 
   async function handleTrend(query, metricLabel) {
-    setTrendLoadingKey(query);
+    setTrendLoadingKeys(prev => new Set([...prev, query]));
     try {
       const res = await fetch("/api/trend", {
         method: "POST",
@@ -351,7 +343,9 @@ export default function ExploreResults() {
       }
     } catch {
       setTrendByQuery(prev => ({ ...prev, [query]: { error: "Network error" } }));
-    } finally { setTrendLoadingKey(null); }
+    } finally {
+      setTrendLoadingKeys(prev => { const next = new Set(prev); next.delete(query); return next; });
+    }
   }
 
   function toggleTrend(query, metricLabel) {
@@ -427,7 +421,35 @@ export default function ExploreResults() {
           </div>
 
           <section className={ex.resultsSection} aria-label="Query results">
-            <h2 className={ex.resultsTitle}>Results</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
+              <h2 className={ex.resultsTitle} style={{ margin: 0 }}>Results</h2>
+              {!loading && results.length > 0 && (
+                <button
+                  className={ex.selectAllBtn}
+                  disabled={allTrendsLoading}
+                  onClick={async () => {
+                    const rows = results.filter(r => !r.error && !trendByQuery[r.query]);
+                    if (rows.length === 0) { results.forEach(row => { if (!row.error) toggleTrend(row.query, row.result?.metric); }); return; }
+                    setAllTrendsLoading(true);
+                    await Promise.all(rows.map(row => handleTrend(row.query, row.result?.metric)));
+                    setAllTrendsLoading(false);
+                  }}
+                  style={{ marginLeft: 0 }}
+                >
+                  {allTrendsLoading ? (
+                    <>
+                      <span className={ex.searchLoadingSpinner} />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                      Show All Trends
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
             {loading ? (
               <div className={ex.resultGrid}>
                 {Array.from({ length: metrics.length || 3 }).map((_, i) => (
@@ -449,7 +471,7 @@ export default function ExploreResults() {
                   const { result } = row;
                   const { color } = getMetricMeta(result.metric);
                   const trend = trendByQuery[row.query];
-                  const trendBusy = trendLoadingKey === row.query;
+                  const trendBusy = trendLoadingKeys.has(row.query);
                   const chartVisible = showTrendMap[row.query] && trend && !trend.error;
                   const hasTrendError = trend?.error != null;
                   const cmpRow = cmpResults.find(r => r.metric === row.metric);
@@ -482,7 +504,7 @@ export default function ExploreResults() {
                         onClick={() => toggleTrend(row.query, result.metric)}
                         aria-expanded={chartVisible}
                       >
-                        {trendBusy ? <><CardSpinner /> Loading chart…</> : chartVisible ? "↑ Hide Chart" : "↓ Show Trend"}
+                        {trendBusy ? <><span className={ex.searchLoadingSpinner} /> Loading...</> : chartVisible ? "↑ Hide Chart" : "↓ Show Trend"}
                       </button>
 
                       {chartVisible && (
