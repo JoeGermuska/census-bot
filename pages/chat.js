@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import Head from "next/head";
 import SiteLayout from "../components/SiteLayout";
 import TrendChart from "../components/TrendChart";
+import BarChart from "../components/BarChart";
 import ChatInputBox from "../components/ChatInputBox";
 import styles from "../styles/Chat.module.css";
 import { buildCensusProfileUrl } from "../lib/censusConstants";
@@ -956,6 +957,8 @@ export default function ChatPage() {
                   {messages.map((msg, i) => {
                     const parsed = msg.role === "assistant" ? safeParse(msg.content) : null;
                     const isTrendChart = parsed?.type === "trend_chart";
+                    const isBarChart = parsed?.type === "bar_chart";
+                    const isAnyChart = isTrendChart || isBarChart;
                     const isChartError = parsed?.type === "error";
                     const isClarification = parsed?.type === "clarification";
 
@@ -977,6 +980,13 @@ export default function ChatPage() {
                                     rendered OUTSIDE the chart so the graph
                                     itself stays clean. Picks up the same
                                     seriesWarnings shape /api/trend produces. */}
+                                {Array.isArray(parsed.seriesWarnings) && parsed.seriesWarnings.length > 0 && (
+                                  <ChartMethodologyNote warning={parsed.seriesWarnings[0]} />
+                                )}
+                              </>
+                            ) : isBarChart ? (
+                              <>
+                                <BarChart data={parsed} />
                                 {Array.isArray(parsed.seriesWarnings) && parsed.seriesWarnings.length > 0 && (
                                   <ChartMethodologyNote warning={parsed.seriesWarnings[0]} />
                                 )}
@@ -1006,13 +1016,13 @@ export default function ChatPage() {
                           {msg.role === "assistant" && !isClarification && !msg.structured && Array.isArray(msg.sources) && msg.sources.length > 0 && (
                             <SourceTrail sources={msg.sources} />
                           )}
-                          {msg.role === "assistant" && !isTrendChart && !isClarification && msg.alternatives && msg.alternatives.length > 0 && (
+                          {msg.role === "assistant" && !isAnyChart && !isClarification && msg.alternatives && msg.alternatives.length > 0 && (
                             <AlternativesBlock
                               alternatives={msg.alternatives}
                               onPick={(opt) => handleAlternativePick(i, opt)}
                             />
                           )}
-                          {msg.role === "assistant" && !isTrendChart && !isClarification && (msg.methodology || msg.caveats) && (
+                          {msg.role === "assistant" && !isAnyChart && !isClarification && (msg.methodology || msg.caveats) && (
                             <MoreInfo methodology={msg.methodology} caveats={msg.caveats} />
                           )}
                         </div>

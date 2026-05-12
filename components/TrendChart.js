@@ -33,19 +33,40 @@ function formatValueForMetric(rawValue, metric) {
   return new Intl.NumberFormat("en-US").format(Math.round(rawValue));
 }
 
-function formatYTick(rawValue, metric) {
+function formatYTick(rawValue, metric, step = null) {
   if (!Number.isFinite(rawValue)) return "";
-  if (/income|rent|value/i.test(metric)) {
+  // Pick decimal precision so adjacent ticks remain distinct. When the
+  // step between ticks is sub-thousand (e.g. $250), rounding to integer
+  // thousands collapses $2,250 → "$2k" and $2,500 → "$3k" — same-looking
+  // labels for different ticks. Heuristic: if step is ≥ 1000, no decimal;
+  // if step is 100..999, one decimal; if step is < 100, two decimals.
+  const decimalsForStep = (s) => {
+    if (s == null) return 0;
+    if (s >= 1000) return 0;
+    if (s >= 100) return 1;
+    return 2;
+  };
+  const isCurrency = /income|rent|value/i.test(metric);
+  const isPercent = /rate|percent|poverty|unemployment|employment|bachelor|education/i.test(metric);
+
+  if (isCurrency) {
     if (rawValue >= 1_000_000) return `$${(rawValue / 1_000_000).toFixed(1)}M`;
-    if (rawValue >= 1000) return `$${Math.round(rawValue / 1000)}k`;
+    if (rawValue >= 1000) {
+      const decimals = decimalsForStep(step);
+      return `$${(rawValue / 1000).toFixed(decimals)}k`;
+    }
     return `$${rawValue}`;
   }
-  if (/rate|percent|poverty|unemployment|employment|bachelor|education/i.test(metric)) {
-    return `${rawValue}%`;
+  if (isPercent) {
+    if (step != null && step < 1) return `${rawValue.toFixed(1)}%`;
+    return `${Math.round(rawValue)}%`;
   }
   if (rawValue >= 1_000_000) return `${(rawValue / 1_000_000).toFixed(1)}M`;
-  if (rawValue >= 1000) return `${Math.round(rawValue / 1000)}k`;
-  return String(rawValue);
+  if (rawValue >= 1000) {
+    const decimals = decimalsForStep(step);
+    return `${(rawValue / 1000).toFixed(decimals)}k`;
+  }
+  return String(Math.round(rawValue));
 }
 
 function pctChange(from, to) {
@@ -249,13 +270,16 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
   // ── SVG geometry ────────────────────────────────────────────────────────────
   const W = 760;
   const H = expanded ? 380 : 320;
-  const PT = 36, PR = 36, PB = 44;
-  // Wider left padding when we'll draw Y-tick labels.
+  const PT = 36, PB = 44;
+  // Wider left padding for Y-tick labels. Right padding widens for multi-
+  // series to give room for the per-line end-of-line value labels (e.g.
+  // "$2,997" rendered to the right of each line's last dot).
   const PL = 64;
+  const PR = visibleSeries.length > 1 ? 96 : 36;
 
   // Y-axis: pick 3–4 round ticks based on min/max of visible data.
-  const { yTicks, minV, maxV } = useMemo(() => {
-    if (visibleSeries.length === 0) return { yTicks: [], minV: 0, maxV: 1 };
+  const { yTicks, yStep, minV, maxV } = useMemo(() => {
+    if (visibleSeries.length === 0) return { yTicks: [], yStep: null, minV: 0, maxV: 1 };
     const all = visibleSeries.flatMap(s => s.points.map(p => p.numericValue));
     const dataMin = Math.min(...all);
     const dataMax = Math.max(...all);
@@ -273,7 +297,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
       ticks.push(t);
       t += step;
     }
-    return { yTicks: ticks, minV: lo, maxV: hi };
+    return { yTicks: ticks, yStep: step, minV: lo, maxV: hi };
   }, [visibleSeries]);
 
   function niceStep(roughStep) {
@@ -402,7 +426,7 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
                 <text x={PL - 8} y={ys(t)} textAnchor="end" dominantBaseline="middle"
                       fontSize="10" fill="var(--chart-muted)"
                       style={{ fontVariantNumeric: "tabular-nums" }}>
-                  {formatYTick(t, metric)}
+                  {formatYTick(t, metric, yStep)}
                 </text>
               </g>
             ))}
@@ -439,12 +463,51 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
                       </g>
                     );
                   })}
-                  {/* Multi-series: dot at last point only */}
+                  {/* Multi-series: dot + end-of-line annotation at the last
+                      point. Per-point labels are too crowded with multiple
+                      overlapping lines, but the latest reading per series is
+                      the most useful single annotation — surface it here. */}
                   {isMulti && s.points.length > 0 && (() => {
                     const last = s.points[s.points.length - 1];
+                    const lx = xs(last.year);
+                    const ly = ys(last.numericValue);
                     return (
-                      <circle cx={xs(last.year)} cy={ys(last.numericValue)} r={3.5}
-                              fill={color} stroke="var(--chart-surface, #fff)" strokeWidth="1.5"/>
+                      <g key={`end-${sIdx}`}>
+                        <circle cx={lx} cy={ly} r={3.5}
+                                fill={color} stroke="var(--chart-surface, #fff)" strokeWidth="1.5"/>
+                        <text x={lx + 6} y={ly}
+                              textAnchor="start" dominantBaseline="middle"
+                              fontSize="10" fontWeight={700}
+                              fill={color}
+                              style={{ fontVariantNumeric: "tabular-nums" }}>
+                          {formatValueForMetric(last.numericValue, metric)}
+                        </text>
+                      </g>
+                    );
+                  })()}
+
+                  {/* Multi-series hover labels: when the user is hovering on
+                      a year, show each series' value at that year right next
+                      to its dot. Skips the last point (which already has a
+                      permanent end-of-line label) to avoid duplication. */}
+                  {isMulti && hoverYear != null && (() => {
+                    const lastYear = s.points[s.points.length - 1]?.year;
+                    if (hoverYear === lastYear) return null;
+                    const hoverPt = s.points.find(p => p.year === hoverYear);
+                    if (!hoverPt) return null;
+                    const hx = xs(hoverPt.year);
+                    const hy = ys(hoverPt.numericValue);
+                    return (
+                      <g key={`hover-${sIdx}`}>
+                        <circle cx={hx} cy={hy} r={4.5}
+                                fill={color} stroke="var(--chart-surface, #fff)" strokeWidth="1.5"/>
+                        <text x={hx} y={hy - 10}
+                              textAnchor="middle" fontSize="10" fontWeight={700}
+                              fill={color}
+                              style={{ fontVariantNumeric: "tabular-nums" }}>
+                          {formatValueForMetric(hoverPt.numericValue, metric)}
+                        </text>
+                      </g>
                     );
                   })()}
                 </g>
@@ -465,19 +528,28 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
               );
             })}
 
-            {/* Hit areas for hover (single-series). */}
-            {!isMulti && yearsInRange.map(year => (
-              <rect key={`hit-${year}`}
-                    x={xs(year) - (W - PL - PR) / Math.max(1, yearsInRange.length) / 2}
-                    y={PT - 6}
-                    width={(W - PL - PR) / Math.max(1, yearsInRange.length)}
-                    height={H - PT - PB + 12}
-                    fill="transparent" style={{ cursor: "crosshair" }}
-                    onMouseEnter={() => setHoverYear(year)}/>
-            ))}
+            {/* Hit areas for hover — single + multi-series. Each year gets
+                a transparent rect spanning the full chart height; mousing
+                into it sets hoverYear which triggers per-series highlight.
+                Width = year-to-year gap (denominator is N-1, not N) so the
+                rects tile cleanly with no gaps where hover wouldn't fire. */}
+            {yearsInRange.map(year => {
+              const gap = yearsInRange.length > 1
+                ? (W - PL - PR) / (yearsInRange.length - 1)
+                : (W - PL - PR);
+              return (
+                <rect key={`hit-${year}`}
+                      x={xs(year) - gap / 2}
+                      y={PT - 6}
+                      width={gap}
+                      height={H - PT - PB + 12}
+                      fill="transparent" style={{ cursor: "crosshair" }}
+                      onMouseEnter={() => setHoverYear(year)}/>
+              );
+            })}
 
             {/* Hover marker — dashed vertical line. */}
-            {!isMulti && hoverYear != null && (
+            {hoverYear != null && (
               <line x1={xs(hoverYear)} x2={xs(hoverYear)} y1={PT} y2={H - PB}
                     stroke="var(--accent)" strokeWidth="1" strokeDasharray="2 3"
                     pointerEvents="none"/>

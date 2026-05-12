@@ -263,6 +263,68 @@ const ACS_DOCS_TOOL = {
   },
 };
 
+// Categorical breakdown — fetches multiple ACS variables for ONE place and
+// renders them as a horizontal bar chart. Use for "race in Irvine",
+// "languages spoken at home in Queens", "household types in Detroit", etc.
+// (any single-place categorical comparison that doesn't fit the trend tool).
+const BREAKDOWN_TOOL = {
+  name: "get_census_breakdown",
+  description:
+    "Fetch multiple ACS variables for ONE place and render them as a horizontal bar chart. " +
+    "Use for categorical breakdowns: race composition, language at home, household type, " +
+    "place of birth, education attainment levels. Pass each bar's variable_id + label + " +
+    "table_id (same shape as lookup_census_variable). The server fetches them in parallel, " +
+    "validates each variable claim, and emits a bar_chart payload sorted descending by value. " +
+    "Pass `share_of_variable_id` (e.g. B02001_001E for total population) to render bars as " +
+    "percentages of that denominator instead of raw counts.",
+  input_schema: {
+    type: "object",
+    properties: {
+      location: {
+        type: "string",
+        description: "Geography expression. Examples: 'Irvine, California', 'Cook County, Illinois', 'zip 90210'.",
+      },
+      title: {
+        type: "string",
+        description: "Short human-readable title for the chart, e.g. 'Race composition' or 'Language spoken at home'.",
+      },
+      bars: {
+        type: "array",
+        description: "List of variables to plot, one per bar. Order is irrelevant — server sorts by value.",
+        items: {
+          type: "object",
+          properties: {
+            variable_id: {
+              type: "string",
+              description: "ACS variable ID like 'B02001_002E'. Must be a real ACS variable.",
+            },
+            label: {
+              type: "string",
+              description: "Precise human-readable bar label, e.g. 'White Alone' (not just 'White').",
+            },
+            table_id: {
+              type: "string",
+              description: "ACS table ID like 'B02001'.",
+            },
+          },
+          required: ["variable_id", "label", "table_id"],
+        },
+        minItems: 2,
+      },
+      unit: {
+        type: "string",
+        enum: ["number", "currency", "percent", "years", "minutes"],
+        description: "Format for the bar values. Defaults to 'number' for raw counts. If `share_of_variable_id` is set, server overrides to 'percent'.",
+      },
+      share_of_variable_id: {
+        type: "string",
+        description: "Optional: divide each bar's value by this denominator (one variable id) and render as percent. Example: B02001_001E for race-as-share-of-total-population.",
+      },
+    },
+    required: ["location", "title", "bars"],
+  },
+};
+
 // Words that explicitly ask for a chart or graph. Used *only* to refine the
 // fast path's chart route inside statistic mode — they never gate the
 // agentic loop's output contract.
@@ -808,6 +870,213 @@ async function runTrendTool(req, toolInput) {
   } catch (err) {
     return { error: String(err?.message || "Failed to fetch trend data.") };
   }
+}
+
+// Categorical breakdown: fetch each bar's variable for one place in parallel,
+// validate each claim, and emit a bar_chart payload sorted descending by value.
+// Each bar also produces a _sourceEntry so the trail enrichment runs over them.
+async function runBreakdownTool(toolInput) {
+  const censusApiKey = process.env.CENSUS_API_KEY;
+  if (!censusApiKey) return { error: "Census API key not configured on server." };
+
+  const { location, title, bars, unit = "number", share_of_variable_id } = toolInput || {};
+  if (!location || !title) {
+    return { error: "Missing required fields: location and title." };
+  }
+  if (!Array.isArray(bars) || bars.length < 2) {
+    return { error: "Pass at least 2 bars in the `bars` array." };
+  }
+
+  // Resolve geography. Mirrors the trend tool's path: parseQuery first
+  // (fast for "City, State"), findGeoCandidates fallback for counties / CBSAs / ZCTAs.
+  let geoParams = null, locationLabel = null, pickedPopulation = null, pickedGeoType = null;
+  try {
+    const parsed = parseQuery(`__placeholder__ in ${location}`);
+    if (!parsed.error && parsed.geoParams && parsed.locationLabel) {
+      geoParams = parsed.geoParams;
+      locationLabel = parsed.locationLabel;
+    }
+  } catch {
+    // fall through
+  }
+  if (!geoParams) {
+    try {
+      const phrase = String(location || "").trim();
+      const lower = phrase.toLowerCase();
+      // State-only shortcut
+      if (STATE_FIPS[lower]) {
+        geoParams = { forGeo: `state:${STATE_FIPS[lower]}` };
+        locationLabel = phrase.replace(/\b\w/g, (c) => c.toUpperCase());
+      } else {
+        // City+state or county etc.
+        const [namePart, statePart] = phrase.includes(",")
+          ? phrase.split(",").map((p) => p.trim())
+          : [phrase, null];
+        const candidates = await findGeoCandidates(namePart, { stateName: statePart });
+        if (candidates && candidates.length > 0) {
+          const picked = candidates[0];
+          geoParams = geoParamsFromCandidate(picked);
+          locationLabel = candidateLabel(picked);
+          pickedPopulation = typeof picked.population === "number" ? picked.population : null;
+          pickedGeoType = picked.geoType || null;
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
+  if (!geoParams) {
+    return { error: `Couldn't resolve "${location}" to a Census geography.` };
+  }
+
+  // Validate every bar's variable claim before fetching anything. One bad
+  // claim short-circuits the whole bar chart with a structured error so
+  // Claude can revise its picks. (Same gate the variable tool uses.)
+  for (const b of bars) {
+    if (!b?.variable_id || !b?.label || !b?.table_id) {
+      return { error: "Each bar requires variable_id, label, and table_id." };
+    }
+    if (!/^[A-Z]\d+_\d+[A-Z]?$/.test(String(b.variable_id).trim())) {
+      return { error: `Invalid variable_id "${b.variable_id}" in bars[].` };
+    }
+    const validationError = await validateVariableClaim({
+      variable_id: b.variable_id, label: b.label, table_id: b.table_id,
+    });
+    if (validationError) {
+      return { error: validationError, kind: "variable_validation" };
+    }
+  }
+
+  // Optional denominator validation (no validateVariableClaim — denominator
+  // labels aren't user-facing, the variable_id is what matters).
+  let denominator = null, denominatorDataset = null;
+  if (share_of_variable_id) {
+    if (!/^[A-Z]\d+_\d+[A-Z]?$/.test(String(share_of_variable_id).trim())) {
+      return { error: `Invalid share_of_variable_id "${share_of_variable_id}".` };
+    }
+    try {
+      // Use the same fallback-aware fetch the stat tool uses so 1-year is preferred.
+      const denomResult = await fetchCensusValueWithMOEAndFallback(
+        share_of_variable_id, geoParams, censusApiKey,
+        { year: CURRENT_ACS_YEAR, population: pickedPopulation, geoType: pickedGeoType }
+      );
+      const denomNum = parseFloat(denomResult.value);
+      if (!Number.isFinite(denomNum) || denomNum <= 0) {
+        return { error: `Denominator ${share_of_variable_id} returned ${denomResult.value} — cannot compute shares.` };
+      }
+      denominator = denomNum;
+      denominatorDataset = denomResult.dataset;
+    } catch (err) {
+      return { error: `Denominator fetch failed: ${String(err?.message || err)}` };
+    }
+  }
+
+  // Fetch all bars in parallel. Each bar gets its own MOE-aware fallback fetch.
+  const fetchOpts = { year: CURRENT_ACS_YEAR, population: pickedPopulation, geoType: pickedGeoType };
+  const fetched = await Promise.all(bars.map(async (b) => {
+    try {
+      const r = await fetchCensusValueWithMOEAndFallback(
+        b.variable_id, geoParams, censusApiKey, fetchOpts
+      );
+      const rawValue = parseFloat(r.value);
+      if (!Number.isFinite(rawValue) || rawValue < 0) {
+        return { ok: false, bar: b, reason: `No valid value for ${b.variable_id}` };
+      }
+      return {
+        ok: true,
+        bar: b,
+        rawValue,
+        moe: r.moe == null ? null : parseFloat(r.moe),
+        dataset: r.dataset,
+        fallbackReason: r.fallbackReason || null,
+      };
+    } catch (err) {
+      return { ok: false, bar: b, reason: String(err?.message || err) };
+    }
+  }));
+
+  const successes = fetched.filter((f) => f.ok);
+  if (successes.length === 0) {
+    return { error: "No bars returned valid data. Check variable IDs and geography." };
+  }
+
+  // Compose the bar list. If share_of, value = (raw / denom) * 100 → percent.
+  const finalUnit = share_of_variable_id ? "percent" : (unit || "number");
+  const renderedBars = successes.map((f) => {
+    let value = f.rawValue;
+    if (share_of_variable_id && denominator) {
+      value = (f.rawValue / denominator) * 100;
+    }
+    return {
+      label: f.bar.label,
+      value,
+      moe: f.moe,
+      variableId: f.bar.variable_id,
+      tableId: f.bar.table_id,
+      dataset: f.dataset,
+    };
+  });
+
+  // Pick a friendly source label. If all bars came from the same dataset, use
+  // that. Otherwise (rare — happens when one variable falls back to 5-year and
+  // another stays on 1-year) fall back to the most common.
+  const datasetCounts = renderedBars.reduce((acc, b) => {
+    acc[b.dataset] = (acc[b.dataset] || 0) + 1;
+    return acc;
+  }, {});
+  const dominantDataset = Object.keys(datasetCounts).reduce(
+    (a, b) => (datasetCounts[a] >= datasetCounts[b] ? a : b),
+    "acs5"
+  );
+  const sourceLabel = buildSourceLabel(dominantDataset, CURRENT_ACS_YEAR) + ", U.S. Census Bureau";
+
+  // Total label (for share-of context line under the title).
+  let totalLabel = null;
+  if (finalUnit === "percent" && denominator) {
+    totalLabel = `Total (denominator): ${formatValue(denominator, "number")}`;
+  } else if (finalUnit === "number") {
+    const sum = renderedBars.reduce((acc, b) => acc + b.value, 0);
+    totalLabel = `Sum across categories: ${formatValue(sum, "number")}`;
+  }
+
+  // Per-bar _sourceEntry, accumulated into a single field on the result so
+  // the loop's strip-and-collect pass picks them all up.
+  const sourceEntries = renderedBars.map((b) => ({
+    kind: "stat",
+    variableId: b.variableId,
+    variable: b.label,
+    place: locationLabel,
+    year: Number(CURRENT_ACS_YEAR),
+    dataset: b.dataset,
+    value: b.value,
+    moe: b.moe,
+    moeFormatted: formatMOE(b.moe, finalUnit),
+    unit: finalUnit,
+    source: buildSourceLabel(b.dataset, CURRENT_ACS_YEAR) + ", U.S. Census Bureau",
+    tables: [{ tableId: b.tableId, url: `https://censusreporter.org/tables/${b.tableId}/` }],
+  }));
+
+  // Surface whether all bars came from the same vintage so the chart's
+  // lede can phrase the methodology line truthfully ("1-year ACS sample"
+  // for a place ≥65k where every bar was 1-year, "5-year" otherwise,
+  // "mixed" if one bar fell back).
+  const distinctDatasets = Object.keys(datasetCounts);
+  const mixedDatasets = distinctDatasets.length > 1;
+
+  return {
+    type: "bar_chart",
+    metric: title,
+    location: locationLabel,
+    unit: finalUnit,
+    year: Number(CURRENT_ACS_YEAR),
+    dataset: dominantDataset,                  // "acs1" or "acs5"
+    mixedDatasets,                             // true if any bar fell back
+    bars: renderedBars,
+    source: sourceLabel,
+    totalLabel,
+    sortDescending: true,
+    _sourceEntries: sourceEntries,
+  };
 }
 
 function getLatestUserMessage(messages) {
@@ -1557,6 +1826,9 @@ export default async function handler(req, res) {
     // inferTrendMetricLabel falls back to "Trend" for variables outside
     // VARIABLE_MAP — e.g. "Vietnamese Alone").
     let lastTrendVariableLabel = null;
+    // Captures the most recent successful breakdown bar-chart payload so the
+    // visualize-mode end-of-loop emits it as the chart reply.
+    let lastBarChart = null;
     // Sources trail: every successful stat fetch during the agentic loop is
     // captured here so the response can surface "More information / sourcing"
     // grounding regardless of which UI shape is rendered (single StatCard,
@@ -1602,7 +1874,7 @@ export default async function handler(req, res) {
         model: MODEL,
         max_tokens: MAX_TOKENS,
         system: systemPrompt,
-        tools: [CENSUS_TOOL, ACS_VARIABLE_TOOL, TREND_TOOL, ACS_DOCS_TOOL],
+        tools: [CENSUS_TOOL, ACS_VARIABLE_TOOL, TREND_TOOL, BREAKDOWN_TOOL, ACS_DOCS_TOOL],
         tool_choice: toolChoice,
         messages: currentMessages,
       });
@@ -1708,6 +1980,13 @@ export default async function handler(req, res) {
                 // and the standard parseQuery path.
                 await attachNuancesAndMethodology(acsVariableStructured, block.input?.variable_id);
               }
+            } else if (block.name === BREAKDOWN_TOOL.name) {
+              result = await runBreakdownTool(block.input);
+              // Capture the bar-chart payload as the loop's final output —
+              // visualize mode emits it as the chart reply at end-of-loop.
+              if (result && result.type === "bar_chart" && Array.isArray(result.bars)) {
+                lastBarChart = result;
+              }
             } else if (block.name === ACS_DOCS_TOOL.name) {
               result = await runAcsDocsTool(block.input);
             } else {
@@ -1719,6 +1998,14 @@ export default async function handler(req, res) {
             if (result && result._sourceEntry) {
               sources.push(result._sourceEntry);
               const { _sourceEntry, ...claudeFacing } = result;
+              result = claudeFacing;
+            }
+            // Same pattern for the breakdown tool's _sourceEntries (plural —
+            // one per bar). Push them all into the trail, strip from Claude-
+            // facing payload.
+            if (result && Array.isArray(result._sourceEntries)) {
+              for (const e of result._sourceEntries) sources.push(e);
+              const { _sourceEntries, ...claudeFacing } = result;
               result = claudeFacing;
             }
             // Safely serialize — catch any unexpected stringify failure
@@ -1749,7 +2036,7 @@ export default async function handler(req, res) {
       break;
     }
 
-    if (!finalReply && trendSeries.length === 0) {
+    if (!finalReply && trendSeries.length === 0 && !lastBarChart) {
       // Loop exhausted without a text reply — likely repeated tool failures.
       // Make one final call with no tools so Claude must write a text response.
       console.warn("[chat] Loop exhausted without text reply — retrying with no tools.");
@@ -1783,6 +2070,12 @@ export default async function handler(req, res) {
     const sourcesField = sources.length > 0 ? { sources } : {};
 
     if (visualizationRequest) {
+      // Bar chart takes precedence when present (Claude explicitly chose
+      // categorical breakdown via get_census_breakdown). Trend chart is the
+      // default — emit it when get_census_trend produced any series.
+      if (lastBarChart) {
+        return res.status(200).json({ reply: JSON.stringify(lastBarChart), ...sourcesField });
+      }
       if (trendSeries.length > 0) {
         // Prefer the variable label echoed by /api/trend (works for both
         // curated and free-form trends). Fall back to inferTrendMetricLabel
