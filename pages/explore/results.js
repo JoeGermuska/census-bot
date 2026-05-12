@@ -226,6 +226,7 @@ export default function ExploreResults() {
   const [trendLoadingKeys, setTrendLoadingKeys] = useState(new Set());
   const [showTrendMap, setShowTrendMap] = useState({});
   const [allTrendsLoading, setAllTrendsLoading] = useState(false);
+  const [expandedQuery, setExpandedQuery] = useState(null);
 
   // Compare state
   const [showCompare, setShowCompare] = useState(false);
@@ -270,6 +271,12 @@ export default function ExploreResults() {
     const id = requestAnimationFrame(() => setProgressWidth(targetProgress));
     return () => cancelAnimationFrame(id);
   }, [fromProgress]);
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") setExpandedQuery(null); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   useEffect(() => {
     if (!ready || metrics.length === 0) return;
@@ -423,32 +430,50 @@ export default function ExploreResults() {
           <section className={ex.resultsSection} aria-label="Query results">
             <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
               <h2 className={ex.resultsTitle} style={{ margin: 0 }}>Results</h2>
-              {!loading && results.length > 0 && (
-                <button
-                  className={ex.selectAllBtn}
-                  disabled={allTrendsLoading}
-                  onClick={async () => {
-                    const rows = results.filter(r => !r.error && !trendByQuery[r.query]);
-                    if (rows.length === 0) { results.forEach(row => { if (!row.error) toggleTrend(row.query, row.result?.metric); }); return; }
-                    setAllTrendsLoading(true);
-                    await Promise.all(rows.map(row => handleTrend(row.query, row.result?.metric)));
-                    setAllTrendsLoading(false);
-                  }}
-                  style={{ marginLeft: 0 }}
-                >
-                  {allTrendsLoading ? (
-                    <>
-                      <span className={ex.searchLoadingSpinner} />
-                      Loading...
-                    </>
-                  ) : (
-                    <>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-                      Show All Trends
-                    </>
-                  )}
-                </button>
-              )}
+              {!loading && results.length > 0 && (() => {
+                const validRows = results.filter(r => !r.error);
+                const allShown = validRows.length > 0 && validRows.every(r => showTrendMap[r.query] && trendByQuery[r.query] && !trendByQuery[r.query].error);
+                return (
+                  <button
+                    className={ex.selectAllBtn}
+                    disabled={allTrendsLoading}
+                    style={{ marginLeft: 0 }}
+                    onClick={async () => {
+                      if (allShown) {
+                        // Hide all charts
+                        setShowTrendMap({});
+                        return;
+                      }
+                      // Show remaining hidden trends
+                      const toFetch = validRows.filter(r => !trendByQuery[r.query]);
+                      const toShow = validRows.filter(r => trendByQuery[r.query] && !trendByQuery[r.query].error && !showTrendMap[r.query]);
+                      toShow.forEach(r => setShowTrendMap(prev => ({ ...prev, [r.query]: true })));
+                      if (toFetch.length > 0) {
+                        setAllTrendsLoading(true);
+                        await Promise.all(toFetch.map(r => handleTrend(r.query, r.result?.metric)));
+                        setAllTrendsLoading(false);
+                      }
+                    }}
+                  >
+                    {allTrendsLoading ? (
+                      <>
+                        <span className={ex.searchLoadingSpinner} />
+                        Loading...
+                      </>
+                    ) : allShown ? (
+                      <>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+                        Hide All Charts
+                      </>
+                    ) : (
+                      <>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                        Show All Trends
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
             </div>
             {loading ? (
               <div className={ex.resultGrid}>
@@ -509,7 +534,12 @@ export default function ExploreResults() {
 
                       {chartVisible && (
                         <div className={ex.inlineChart}>
-                          <TrendChart data={trend} inline />
+                          <TrendChart
+                            data={trend}
+                            inline
+                            showToolbar
+                            onExpand={() => setExpandedQuery(row.query)}
+                          />
                           {(() => {
                             const summary = buildTrendSummary(trend.points, result.metric);
                             return summary ? <p className={ex.trendSummary}>{summary}</p> : null;
@@ -577,6 +607,50 @@ export default function ExploreResults() {
           )}
         </div>
       </SiteLayout>
+
+      {/* ── Fullscreen chart modal ── */}
+      {expandedQuery && trendByQuery[expandedQuery] && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Expanded chart"
+          onClick={e => { if (e.target === e.currentTarget) setExpandedQuery(null); }}
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "2rem",
+          }}
+        >
+          <div style={{
+            background: "var(--surface)", borderRadius: 20,
+            border: "1px solid var(--border)",
+            width: "min(960px, 100%)", maxHeight: "90vh", overflowY: "auto",
+            padding: "2rem", position: "relative",
+            boxShadow: "0 32px 80px rgba(0,0,0,0.5)",
+          }}>
+            <button
+              type="button"
+              aria-label="Minimize chart"
+              onClick={() => setExpandedQuery(null)}
+              style={{
+                position: "absolute", top: 16, right: 16,
+                background: "transparent", border: "1px solid var(--border)",
+                borderRadius: 8, padding: "5px 10px", cursor: "pointer",
+                color: "var(--text-dim)", display: "inline-flex", alignItems: "center", gap: 5,
+                fontSize: 12, fontWeight: 600,
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+                <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
+              </svg>
+              Minimize
+            </button>
+            <TrendChart data={trendByQuery[expandedQuery]} expanded />
+          </div>
+        </div>
+      )}
     </>
   );
 }

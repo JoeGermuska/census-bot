@@ -183,9 +183,12 @@ function normalizeSeries(data) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-// inline=true : strip the title row (chart only) for embedding inside a parent card.
-// expanded=true: larger chart (used in modal expand mode).
-export default function TrendChart({ data, expanded = false, inline = false }) {
+// inline=true    : strip the title row (chart only) for embedding inside a parent card.
+// expanded=true  : larger chart (used in modal expand mode).
+// showToolbar    : render CSV / PNG / expand buttons below the inline chart.
+// onExpand       : callback fired when the expand button is clicked.
+// forceLight     : render PNG with hard-coded light-mode colours regardless of theme.
+export default function TrendChart({ data, expanded = false, inline = false, showToolbar = false, onExpand }) {
   const [visible, setVisible] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [hoverYear, setHoverYear] = useState(null);
@@ -572,6 +575,41 @@ export default function TrendChart({ data, expanded = false, inline = false }) {
                 </span>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Inline toolbar: CSV / PNG / expand — only when showToolbar is set. */}
+      {inline && showToolbar && visibleSeries.length > 0 && (
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginTop: 10 }}>
+          <button type="button"
+            onClick={() => downloadCSV(visibleSeries, metric, location)}
+            style={{
+              fontSize: 10, fontWeight: 600, padding: "3px 8px",
+              border: "1px solid var(--border)", borderRadius: 4,
+              background: "transparent", color: "var(--text-dim)", cursor: "pointer",
+            }}>CSV</button>
+          <button type="button"
+            onClick={() => downloadPNG(chartContainerRef, metric, location, "#ffffff")}
+            style={{
+              fontSize: 10, fontWeight: 600, padding: "3px 8px",
+              border: "1px solid var(--border)", borderRadius: 4,
+              background: "transparent", color: "var(--text-dim)", cursor: "pointer",
+            }}>PNG</button>
+          {onExpand && (
+            <button type="button" aria-label="Expand chart" onClick={onExpand}
+              style={{
+                fontSize: 10, fontWeight: 600, padding: "3px 8px",
+                border: "1px solid var(--border)", borderRadius: 4,
+                background: "transparent", color: "var(--text-dim)", cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 4,
+              }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+              </svg>
+              Expand
+            </button>
           )}
         </div>
       )}
